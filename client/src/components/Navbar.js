@@ -43,7 +43,7 @@ export default function Navbar() {
             <Link to="/login" className="btn btn-outline">
               Login
             </Link>
-            <Link to="/register" className="btn btn-primary">
+            <Link to="/register" className="btn btn-accent">
               Sign Up
             </Link>
           </>

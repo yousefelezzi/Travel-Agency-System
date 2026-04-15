@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const {
   searchFlights,
+  listAirports,
   getFlightById,
   createFlight,
   updateFlight,
@@ -11,6 +12,7 @@ const { authenticate, authorize } = require("../middleware/auth.middleware");
 
 // Public
 router.get("/", searchFlights);
+router.get("/airports", listAirports);
 router.get("/:id", getFlightById);
 
 // Agent + Admin
