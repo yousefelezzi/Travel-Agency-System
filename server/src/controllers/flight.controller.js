@@ -53,6 +53,22 @@ const searchFlights = async (req, res, next) => {
   }
 };
 
+// GET /api/flights/airports
+const listAirports = async (_req, res, next) => {
+  try {
+    const [deps, arrs] = await Promise.all([
+      prisma.flight.findMany({ distinct: ["departurePort"], select: { departurePort: true } }),
+      prisma.flight.findMany({ distinct: ["arrivalPort"], select: { arrivalPort: true } }),
+    ]);
+    const set = new Set();
+    deps.forEach((d) => set.add(d.departurePort));
+    arrs.forEach((a) => set.add(a.arrivalPort));
+    res.json({ airports: [...set].sort() });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // GET /api/flights/:id
 const getFlightById = async (req, res, next) => {
   try {
@@ -105,6 +121,7 @@ const deleteFlight = async (req, res, next) => {
 
 module.exports = {
   searchFlights,
+  listAirports,
   getFlightById,
   createFlight,
   updateFlight,
