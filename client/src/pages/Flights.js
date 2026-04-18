@@ -244,6 +244,7 @@ function AirportCombo({ label, placeholder, value, onChange, options, onCommit, 
 }
 
 const SORTS = [
+  { key: "recommended", label: "Recommended" },
   { key: "cheapest", label: "Cheapest" },
   { key: "fastest", label: "Fastest" },
   { key: "best", label: "Best Value" },
@@ -252,7 +253,7 @@ const SORTS = [
 export default function Flights() {
   const [flights, setFlights] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [sort, setSort] = useState("cheapest");
+  const [sort, setSort] = useState("recommended");
   const [filters, setFilters] = useState({
     from: "",
     to: "",
@@ -260,7 +261,7 @@ export default function Flights() {
     maxPrice: "",
     passengers: "1",
   });
-  const [lastQuery, setLastQuery] = useState({ from: "", to: "" });
+  const [lastQuery, setLastQuery] = useState({ from: "", to: "", date: "", passengers: "1" });
   const [pagination, setPagination] = useState({});
   const [airports, setAirports] = useState([]);
   const toRef = useRef(null);
@@ -285,7 +286,12 @@ export default function Flights() {
       const res = await api.get("/flights", { params });
       setFlights(res.data.flights);
       setPagination(res.data.pagination);
-      setLastQuery({ from: filters.from, to: filters.to });
+      setLastQuery({
+        from: filters.from,
+        to: filters.to,
+        date: filters.date,
+        passengers: filters.passengers,
+      });
     } catch (err) {
       console.error(err);
     } finally {
@@ -326,13 +332,21 @@ export default function Flights() {
       day: "numeric",
     });
 
+  const fmtDateShort = (iso) => {
+    if (!iso) return "";
+    return new Date(iso + "T00:00:00").toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+    });
+  };
+
   const sortedFlights = useMemo(() => {
     const arr = [...flights];
     if (sort === "cheapest") {
       arr.sort((a, b) => Number(a.economyPrice) - Number(b.economyPrice));
     } else if (sort === "fastest") {
       arr.sort((a, b) => durationMin(a) - durationMin(b));
-    } else {
+    } else if (sort === "best") {
       const maxP = Math.max(...arr.map((f) => Number(f.economyPrice)), 1);
       const maxD = Math.max(...arr.map(durationMin), 1);
       arr.sort(
@@ -341,22 +355,37 @@ export default function Flights() {
           durationMin(a) / maxD -
           (Number(b.economyPrice) / maxP + durationMin(b) / maxD)
       );
+    } else {
+      // "recommended" — balance price and duration, prefer nonstop
+      const maxP = Math.max(...arr.map((f) => Number(f.economyPrice)), 1);
+      const maxD = Math.max(...arr.map(durationMin), 1);
+      arr.sort(
+        (a, b) =>
+          (Number(a.economyPrice) / maxP) * 0.5 +
+          (durationMin(a) / maxD) * 0.5 -
+          ((Number(b.economyPrice) / maxP) * 0.5 +
+           (durationMin(b) / maxD) * 0.5)
+      );
     }
     return arr;
   }, [flights, sort]);
 
   const bestId = sortedFlights[0]?.id;
   const bestLabel =
-    sort === "cheapest" ? "Cheapest" : sort === "fastest" ? "Fastest" : "Best Value";
+    sort === "cheapest" ? "Cheapest" : sort === "fastest" ? "Fastest" : sort === "best" ? "Best Value" : "Recommended";
 
   const resultsHeadline = () => {
     const count = flights.length;
     const { from, to } = lastQuery;
-    if (!count) return "No flights yet";
-    if (from && to) return `${count} flight${count === 1 ? "" : "s"} found from ${from} to ${to}`;
-    if (from) return `${count} flight${count === 1 ? "" : "s"} found from ${from}`;
-    if (to) return `${count} flight${count === 1 ? "" : "s"} found to ${to}`;
-    return `${count} flight${count === 1 ? "" : "s"} available`;
+    if (!count && loading) return "Searching best routes\u2026";
+    if (!count) return "No flights found";
+    const parts = [];
+    parts.push(`${count} flight${count === 1 ? "" : "s"}`);
+    if (from && to) parts.push(`from ${from} to ${to}`);
+    else if (from) parts.push(`from ${from}`);
+    else if (to) parts.push(`to ${to}`);
+    else parts.push("available");
+    return parts.join(" ");
   };
 
   return (
@@ -365,14 +394,19 @@ export default function Flights() {
         <div className="flights-hero-bg" aria-hidden="true">
           <div className="flights-hero-blob flights-hero-blob-1" />
           <div className="flights-hero-blob flights-hero-blob-2" />
+          <div className="flights-hero-grid" />
         </div>
         <div className="flights-hero-inner">
-          <span className="flights-eyebrow">Flights</span>
+          <span className="flights-eyebrow">
+            <span className="flights-eyebrow-dot" />
+            Flights
+          </span>
           <h1 className="flights-title">
             Where do you want to <span className="flights-title-accent">go?</span>
           </h1>
           <p className="flights-sub">
-            Compare thousands of routes and find the one that fits your trip — and your budget.
+            Compare thousands of routes across 850+ airlines. Real-time
+            pricing, instant confirmation.
           </p>
 
           <form className="flights-search" onSubmit={handleSearch}>
@@ -442,13 +476,40 @@ export default function Flights() {
               Search
             </button>
           </form>
+
+          {/* Trust stats — matching Hotels pattern */}
+          <div className="flights-trust">
+            <div className="flights-trust-item">
+              <strong>850+</strong>
+              <span>airlines</span>
+            </div>
+            <span className="flights-trust-divider" />
+            <div className="flights-trust-item">
+              <strong>120+</strong>
+              <span>countries</span>
+            </div>
+            <span className="flights-trust-divider" />
+            <div className="flights-trust-item">
+              <strong>&lt;1s</strong>
+              <span>price refresh</span>
+            </div>
+          </div>
         </div>
       </section>
 
       <section className="flights-results">
         <div className="flights-results-header">
-          <div className="flights-results-count">
-            {loading ? "Searching best routes…" : resultsHeadline()}
+          <div className="flights-results-headline">
+            <div className="flights-results-count">
+              {loading ? "Searching best routes\u2026" : resultsHeadline()}
+            </div>
+            {!loading && (lastQuery.date || lastQuery.passengers !== "1") && (
+              <div className="flights-results-context">
+                {lastQuery.date && <>{fmtDateShort(lastQuery.date)}</>}
+                {lastQuery.date && lastQuery.passengers && <> &middot; </>}
+                {lastQuery.passengers && <>{lastQuery.passengers} passenger{lastQuery.passengers !== "1" ? "s" : ""}</>}
+              </div>
+            )}
           </div>
           <div className="flights-sort" role="tablist">
             {SORTS.map((s) => (
@@ -473,14 +534,20 @@ export default function Flights() {
           </div>
         ) : sortedFlights.length === 0 ? (
           <div className="empty-state">
+            <div className="empty-state-icon">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z" />
+              </svg>
+            </div>
             <h3>No flights found</h3>
             <p>Try different dates or destinations.</p>
           </div>
         ) : (
           <div className="flight-list">
-            {sortedFlights.map((f) => {
+            {sortedFlights.map((f, idx) => {
               const mins = durationMin(f);
               const isBest = f.id === bestId;
+              const seatsLow = f.availableSeats <= 5;
               return (
                 <article
                   key={f.id}
@@ -491,6 +558,7 @@ export default function Flights() {
                   onKeyDown={(e) => {
                     if (e.key === "Enter") navigate(`/book?type=flight&id=${f.id}`);
                   }}
+                  style={{ animationDelay: `${idx * 0.04}s` }}
                 >
                   {isBest && <span className="flight-badge">{bestLabel}</span>}
                   <div className="flight-card-main">
@@ -542,7 +610,7 @@ export default function Flights() {
                           navigate(`/book?type=flight&id=${f.id}`);
                         }}
                       >
-                        Book
+                        Select
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M5 12h14M12 5l7 7-7 7" />
                         </svg>
@@ -553,7 +621,14 @@ export default function Flights() {
                   <div className="flight-card-meta">
                     <span>{f.aircraftType || "Standard aircraft"}</span>
                     <span className="flight-dot" />
-                    <span>{f.availableSeats} seats left</span>
+                    <span className={seatsLow ? "flight-seats-low" : ""}>
+                      {seatsLow && (
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 3, verticalAlign: -1 }}>
+                          <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+                        </svg>
+                      )}
+                      {f.availableSeats} seat{f.availableSeats !== 1 ? "s" : ""} left
+                    </span>
                     <span className="flight-dot" />
                     <span>Economy</span>
                   </div>
