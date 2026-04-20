@@ -27,6 +27,7 @@ export default function Navbar() {
         <Link to="/flights">Flights</Link>
         <Link to="/hotels">Hotels</Link>
         <Link to="/packages">Packages</Link>
+        {user && <Link to="/planner" className="nav-planner">AI Planner</Link>}
         {user ? (
           <>
             <Link to="/dashboard">Dashboard</Link>

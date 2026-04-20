@@ -11,6 +11,8 @@ const hotelRoutes = require("./routes/hotel.routes");
 const packageRoutes = require("./routes/package.routes");
 const bookingRoutes = require("./routes/booking.routes");
 const favoriteRoutes = require("./routes/favorite.routes");
+const paymentRoutes = require("./routes/payment.routes");
+const plannerRoutes = require("./routes/planner.routes");
 
 const app = express();
 const PORT = process.env.PORT || 5001;
@@ -28,6 +30,8 @@ app.use("/api/hotels", hotelRoutes);
 app.use("/api/packages", packageRoutes);
 app.use("/api/bookings", bookingRoutes);
 app.use("/api/favorites", favoriteRoutes);
+app.use("/api/payments", paymentRoutes);
+app.use("/api/planner", plannerRoutes);
 
 // Health check
 app.get("/api/health", async (req, res) => {

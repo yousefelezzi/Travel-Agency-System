@@ -122,7 +122,7 @@ const createBooking = async (req, res, next) => {
           numberOfPersons: passengers.length,
           totalAmount,
           discount: 0,
-          status: "CONFIRMED",
+          status: "PENDING",
           items: {
             create: bookingItemsData,
           },
@@ -169,16 +169,6 @@ const createBooking = async (req, res, next) => {
         }
       }
 
-      // Create invoice
-      const invoiceNumber = `INV-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
-      await tx.invoice.create({
-        data: {
-          bookingId: newBooking.id,
-          invoiceNumber,
-          totalAmount,
-        },
-      });
-
       return newBooking;
     });
 
@@ -195,7 +185,7 @@ const createBooking = async (req, res, next) => {
     });
 
     res.status(201).json({
-      message: "Booking confirmed.",
+      message: "Booking created. Awaiting payment.",
       booking: fullBooking,
     });
   } catch (error) {

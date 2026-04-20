@@ -9,7 +9,10 @@ import Flights from "./pages/Flights";
 import Hotels from "./pages/Hotels";
 import Packages from "./pages/Packages";
 import Book from "./pages/Book";
+import Payment from "./pages/Payment";
 import Dashboard from "./pages/Dashboard";
+import BookingDetails from "./pages/BookingDetails";
+import Planner from "./pages/Planner";
 import "./App.css";
 
 function App() {
@@ -34,10 +37,34 @@ function App() {
               }
             />
             <Route
+              path="/payment/:bookingId"
+              element={
+                <ProtectedRoute roles={["CUSTOMER"]}>
+                  <Payment />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/dashboard"
               element={
                 <ProtectedRoute>
                   <Dashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/bookings/:id"
+              element={
+                <ProtectedRoute>
+                  <BookingDetails />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/planner"
+              element={
+                <ProtectedRoute roles={["CUSTOMER"]}>
+                  <Planner />
                 </ProtectedRoute>
               }
             />
