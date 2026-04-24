@@ -1,5 +1,5 @@
 {
-  "name": "tas-server",
+  "name": "atlas-server",
   "version": "1.0.0",
   "description": "Travel Agency System - Backend API",
   "main": "src/index.js",

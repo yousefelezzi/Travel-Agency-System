@@ -57,7 +57,7 @@ app.use((err, req, res, next) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`TAS Server running on port ${PORT}`);
+  console.log(`ATLAS Server running on port ${PORT}`);
 });
 
 module.exports = app;

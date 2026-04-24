@@ -29,7 +29,7 @@ async function main() {
 
   const adminUser = await prisma.user.create({
     data: {
-      email: "admin@tas.com",
+      email: "admin@atlas.com",
       username: "admin",
       passwordHash,
       role: "ADMIN",
@@ -45,7 +45,7 @@ async function main() {
 
   const agentUser = await prisma.user.create({
     data: {
-      email: "agent@tas.com",
+      email: "agent@atlas.com",
       username: "agent",
       passwordHash,
       role: "TRAVEL_AGENT",
@@ -300,8 +300,8 @@ async function main() {
 
   console.log("Seed complete!");
   console.log("Test accounts (password: Test@1234 for all):");
-  console.log("  Admin:    admin@tas.com");
-  console.log("  Agent:    agent@tas.com");
+  console.log("  Admin:    admin@atlas.com");
+  console.log("  Agent:    agent@atlas.com");
   console.log("  Customer: john@example.com");
   console.log("  Customer: alice@example.com");
 }

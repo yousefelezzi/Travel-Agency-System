@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 
 const heroTrips = [
   {
@@ -86,6 +87,8 @@ const tabs = [
   {
     id: "flights",
     label: "Flights",
+    submitLabel: "Search Flights",
+    route: "/flights",
     icon: (
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z" />
@@ -95,6 +98,8 @@ const tabs = [
   {
     id: "hotels",
     label: "Hotels",
+    submitLabel: "Search Hotels",
+    route: "/hotels",
     icon: (
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M3 21h18M5 21V7l7-4 7 4v14M9 9h.01M15 9h.01M9 13h.01M15 13h.01M9 17h6" />
@@ -104,6 +109,8 @@ const tabs = [
   {
     id: "packages",
     label: "Packages",
+    submitLabel: "Search Packages",
+    route: "/packages",
     icon: (
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
@@ -111,12 +118,50 @@ const tabs = [
       </svg>
     ),
   },
+  {
+    id: "planner",
+    label: "AI Planner",
+    submitLabel: "Plan with AI",
+    route: "/planner",
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+        <circle cx="12" cy="12" r="3" />
+      </svg>
+    ),
+  },
 ];
 
-const longestCity = heroTrips.reduce(
-  (acc, t) => (t.city.length > acc.length ? t.city : acc),
-  ""
-);
+const TAB_BY_ID = Object.fromEntries(tabs.map((t) => [t.id, t]));
+
+const buildSearchUrl = (mode, form) => {
+  const params = new URLSearchParams();
+  if (mode === "flights") {
+    if (form.from) params.set("from", form.from);
+    if (form.to) params.set("to", form.to);
+    if (form.depart) params.set("depart", form.depart);
+    if (form.tripClass === "roundtrip" && form.returnDate) params.set("return", form.returnDate);
+    if (form.travelers) params.set("travelers", form.travelers);
+    params.set("tripClass", form.tripClass || "roundtrip");
+  } else if (mode === "hotels") {
+    if (form.to) params.set("destination", form.to);
+    if (form.depart) params.set("checkIn", form.depart);
+    if (form.returnDate) params.set("checkOut", form.returnDate);
+    if (form.travelers) params.set("guests", form.travelers);
+  } else if (mode === "packages") {
+    if (form.to) params.set("destination", form.to);
+    if (form.depart) params.set("startDate", form.depart);
+    if (form.returnDate) params.set("endDate", form.returnDate);
+    if (form.travelers) params.set("travelers", form.travelers);
+  } else if (mode === "planner") {
+    if (form.to) params.set("destination", form.to);
+    if (form.depart) params.set("startDate", form.depart);
+    if (form.returnDate) params.set("endDate", form.returnDate);
+    if (form.travelers) params.set("travelers", form.travelers);
+  }
+  const q = params.toString();
+  return q ? `${TAB_BY_ID[mode].route}?${q}` : TAB_BY_ID[mode].route;
+};
 
 const handleImgError = (fallback) => (e) => {
   if (e.target.src !== fallback) {
@@ -125,8 +170,18 @@ const handleImgError = (fallback) => (e) => {
 };
 
 export default function Home() {
+  const navigate = useNavigate();
+
   const [tripType, setTripType] = useState("flights");
   const [slideIndex, setSlideIndex] = useState(0);
+  const [form, setForm] = useState({
+    from: "",
+    to: "",
+    depart: "",
+    returnDate: "",
+    travelers: "2",
+    tripClass: "roundtrip",
+  });
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -135,7 +190,16 @@ export default function Home() {
     return () => clearInterval(id);
   }, []);
 
+  const updateField = (key) => (e) =>
+    setForm((f) => ({ ...f, [key]: e.target.value }));
+
+  const handleSearch = (e) => {
+    e?.preventDefault();
+    navigate(buildSearchUrl(tripType, form));
+  };
+
   const currentTrip = heroTrips[slideIndex];
+  const activeTab = TAB_BY_ID[tripType];
 
   return (
     <div className="home">
@@ -165,26 +229,8 @@ export default function Home() {
             </span>
 
             <h1 className="hero-title">
-              <span className="hero-title-line">Your next journey</span>
-              <span className="hero-title-line hero-title-rotate">
-                <span className="hero-title-to">to</span>
-                <span className="rotator">
-                  <span className="rotator-ghost" aria-hidden="true">
-                    {longestCity}
-                  </span>
-                  {heroTrips.map((t, i) => (
-                    <span
-                      key={t.city}
-                      className={`rotator-slot ${i === slideIndex ? "is-active" : ""}`}
-                      aria-hidden={i !== slideIndex}
-                    >
-                      {t.city}
-                    </span>
-                  ))}
-                </span>
-              </span>
-              <span className="hero-title-line hero-title-serif">
-                beautifully planned.
+              <span className="hero-title-line hero-title-gradient">
+                Your Trip. Your Way.
               </span>
             </h1>
 
@@ -194,14 +240,22 @@ export default function Home() {
             </p>
 
             <div className="hero-actions">
-              <button type="button" className="btn-cta btn-cta-primary">
-                Start exploring
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <button
+                type="button"
+                className="btn-cta btn-cta-hero-primary"
+                onClick={() => navigate("/flights")}
+              >
+                Book Your Flight
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M5 12h14M12 5l7 7-7 7" />
                 </svg>
               </button>
-              <button type="button" className="btn-cta btn-cta-ghost">
-                How it works
+              <button
+                type="button"
+                className="btn-cta btn-cta-hero-secondary"
+                onClick={() => navigate("/planner")}
+              >
+                Build My Trip
               </button>
             </div>
           </div>
@@ -259,8 +313,8 @@ export default function Home() {
       </section>
 
       {/* ========== SEARCH WIDGET ========== */}
-      <section className="search-wrap">
-        <div className="search-widget">
+      <section className="search-wrap" id="search">
+        <form className="search-widget" onSubmit={handleSearch}>
           <div className="search-prompt">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
@@ -280,35 +334,119 @@ export default function Home() {
               </button>
             ))}
           </div>
+
+          {tripType === "flights" && (
+            <div className="search-trip-class" role="radiogroup" aria-label="Trip type">
+              {[
+                { id: "roundtrip", label: "Round-trip" },
+                { id: "oneway", label: "One-way" },
+              ].map((opt) => (
+                <label
+                  key={opt.id}
+                  className={`trip-class-opt ${form.tripClass === opt.id ? "is-active" : ""}`}
+                >
+                  <input
+                    type="radio"
+                    name="tripClass"
+                    value={opt.id}
+                    checked={form.tripClass === opt.id}
+                    onChange={updateField("tripClass")}
+                  />
+                  {opt.label}
+                </label>
+              ))}
+            </div>
+          )}
+
           <div className="search-fields">
+            {tripType === "flights" && (
+              <>
+                <div className="search-field">
+                  <label>From</label>
+                  <input
+                    type="text"
+                    placeholder="City or airport"
+                    value={form.from}
+                    onChange={updateField("from")}
+                  />
+                </div>
+                <div className="sep" />
+              </>
+            )}
+
             <div className="search-field">
-              <label>From</label>
-              <input type="text" placeholder="City or airport" defaultValue="Beirut (BEY)" />
+              <label>
+                {tripType === "flights"
+                  ? "To"
+                  : tripType === "hotels"
+                  ? "Destination"
+                  : tripType === "packages"
+                  ? "Destination"
+                  : "Where to"}
+              </label>
+              <input
+                type="text"
+                placeholder={
+                  tripType === "flights" ? "Where to?" : "City, country, or region"
+                }
+                value={form.to}
+                onChange={updateField("to")}
+              />
             </div>
             <div className="sep" />
+
             <div className="search-field">
-              <label>To</label>
-              <input type="text" placeholder="Where to?" defaultValue="Paris (CDG)" />
+              <label>
+                {tripType === "flights"
+                  ? "Depart"
+                  : tripType === "hotels"
+                  ? "Check-in"
+                  : "Start date"}
+              </label>
+              <input type="date" value={form.depart} onChange={updateField("depart")} />
             </div>
+
+            {(tripType !== "flights" || form.tripClass === "roundtrip") && (
+              <>
+                <div className="sep" />
+                <div className="search-field">
+                  <label>
+                    {tripType === "flights"
+                      ? "Return"
+                      : tripType === "hotels"
+                      ? "Check-out"
+                      : "End date"}
+                  </label>
+                  <input
+                    type="date"
+                    value={form.returnDate}
+                    onChange={updateField("returnDate")}
+                  />
+                </div>
+              </>
+            )}
+
             <div className="sep" />
             <div className="search-field">
-              <label>Depart</label>
-              <input type="date" />
+              <label>{tripType === "hotels" ? "Guests" : "Travelers"}</label>
+              <select value={form.travelers} onChange={updateField("travelers")}>
+                {[1, 2, 3, 4, 5, 6, 7, 8].map((n) => (
+                  <option key={n} value={n}>
+                    {n} {n === 1 ? "person" : "people"}
+                  </option>
+                ))}
+              </select>
             </div>
-            <div className="sep" />
-            <div className="search-field">
-              <label>Travelers</label>
-              <input type="text" defaultValue="2 Adults" />
-            </div>
-            <button type="button" className="search-submit">
+
+            <button type="submit" className="search-submit">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="11" cy="11" r="8" />
                 <path d="m21 21-4.3-4.3" />
               </svg>
-              Search
+              {activeTab.submitLabel}
             </button>
           </div>
-        </div>
+        </form>
       </section>
 
       {/* ========== MARQUEE ========== */}
@@ -427,7 +565,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ========== WHY TAS — Bento ========== */}
+      {/* ========== WHY ATLAS — Bento ========== */}
       <section className="why-wrap">
         <div className="why-bg" aria-hidden="true">
           <div className="why-blob why-blob-1" />
@@ -435,7 +573,7 @@ export default function Home() {
         </div>
         <div className="why-inner">
           <div className="section-head section-head-center">
-            <span className="section-eyebrow">— Why TAS</span>
+            <span className="section-eyebrow">— Why ATLAS</span>
             <h2 className="section-title">
               Built for travelers.
               <br />
@@ -535,11 +673,11 @@ export default function Home() {
               <em>one tap away.</em>
             </h2>
             <p>
-              Join 2M+ travelers planning smarter with TAS. Book with confidence,
+              Join 2M+ travelers planning smarter with ATLAS. Book with confidence,
               travel without the stress &mdash; we'll handle the rest.
             </p>
             <div className="cta-actions">
-              <button type="button" className="btn-cta btn-cta-accent">Plan smarter with TAS</button>
+              <button type="button" className="btn-cta btn-cta-accent">Plan smarter with ATLAS</button>
               <button type="button" className="btn-cta btn-cta-ghost-light">Talk to an expert</button>
             </div>
           </div>
@@ -552,9 +690,9 @@ export default function Home() {
           <div className="footer-brand">
             <div className="footer-mark">
               <span className="footer-mark-icon" />
-              TAS
+              ATLAS
             </div>
-            <p>Beautifully planned journeys, from search to boarding pass.</p>
+            <p>Your Trip. Your Way.</p>
           </div>
           <div className="footer-cols">
             <div className="footer-col">
@@ -578,7 +716,7 @@ export default function Home() {
           </div>
         </div>
         <div className="footer-bottom">
-          &copy; 2026 TAS &middot; Crafted for travelers.
+          &copy; 2026 ATLAS &middot; Crafted for travelers.
         </div>
       </footer>
     </div>
