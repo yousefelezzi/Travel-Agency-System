@@ -399,14 +399,15 @@ export default function Flights() {
         <div className="flights-hero-inner">
           <span className="flights-eyebrow">
             <span className="flights-eyebrow-dot" />
-            Flights
+            — Search flights
           </span>
           <h1 className="flights-title">
-            Where do you want to <span className="flights-title-accent">go?</span>
+            Where do you want to
+            <span className="flights-title-accent"> go?</span>
           </h1>
           <p className="flights-sub">
             Compare thousands of routes across 850+ airlines. Real-time
-            pricing, instant confirmation.
+            pricing, instant confirmation, <em>zero noise.</em>
           </p>
 
           <form className="flights-search" onSubmit={handleSearch}>

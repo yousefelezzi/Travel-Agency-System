@@ -42,13 +42,23 @@ export default function Login() {
           onError={(e) => { if (e.target.src !== FALLBACK) e.target.src = FALLBACK; }}
         />
         <div className="auth-visual-overlay" />
+        <div className="auth-visual-aurora" aria-hidden="true" />
+        <div className="auth-visual-grain" aria-hidden="true" />
         <div className="auth-visual-content">
           <div className="auth-visual-brand">
             <span className="auth-visual-mark" />
             TAS
           </div>
           <div className="auth-visual-copy">
-            <h2>Your next journey starts here.</h2>
+            <span className="auth-visual-eyebrow">
+              <span className="auth-visual-eyebrow-dot" />
+              Welcome back
+            </span>
+            <h2>
+              Your next journey
+              <br />
+              <em>starts here.</em>
+            </h2>
             <p>Plan smarter. Book faster. Travel better.</p>
           </div>
           <div className="auth-visual-stats">
@@ -72,8 +82,11 @@ export default function Login() {
       <div className="auth-form-panel">
         <div className="auth-form-inner">
           <div className="auth-form-header">
-            <h2>Welcome back</h2>
-            <p>Sign in to continue your journey with TAS</p>
+            <span className="auth-form-eyebrow">— Sign in</span>
+            <h2>
+              Welcome <em>back.</em>
+            </h2>
+            <p>Sign in to continue your journey with TAS.</p>
           </div>
 
           {error && <div className="alert alert-error">{error}</div>}
