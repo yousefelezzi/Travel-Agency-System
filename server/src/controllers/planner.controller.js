@@ -11,6 +11,7 @@ const generate = async (req, res, next) => {
       budget = null,
       style = "",
       interests = [],
+      context = "",
     } = req.body || {};
 
     if (!destination && !startDate && !endDate) {
@@ -27,6 +28,7 @@ const generate = async (req, res, next) => {
       budget: budget ? Number(budget) : null,
       style: String(style || "").trim(),
       interests: Array.isArray(interests) ? interests.slice(0, 6) : [],
+      context: typeof context === "string" ? context.slice(0, 600) : "",
     });
 
     res.json(result);

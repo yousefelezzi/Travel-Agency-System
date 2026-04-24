@@ -1,7 +1,33 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../services/api";
 import { Icon } from "../components/Icons";
+import {
+  clearPlannerDraft,
+  hasQuiz,
+  loadPlannerDraft,
+  loadQuiz,
+} from "../utils/preferences";
+import { buildPlannerContext } from "../utils/recommend";
+
+const VAGUE_INPUTS = [
+  "i don't know",
+  "idk",
+  "anywhere",
+  "surprise me",
+  "i'm not sure",
+  "im not sure",
+  "not sure",
+  "no idea",
+  "doesn't matter",
+  "doesnt matter",
+];
+
+const isVagueDestination = (val) => {
+  if (!val) return false;
+  const t = val.trim().toLowerCase();
+  return VAGUE_INPUTS.includes(t) || t === "?" || t === "anywhere/anything";
+};
 
 const INTERESTS = [
   { id: "beach", label: "Beach" },
@@ -138,6 +164,23 @@ export default function Planner() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState(null);
+  const [contextSource, setContextSource] = useState(null); // "quiz" | "build" | null
+
+  useEffect(() => {
+    const draft = loadPlannerDraft();
+    if (draft?.form) {
+      setForm((f) => ({ ...f, ...draft.form }));
+      setContextSource(draft.fromQuiz ? "quiz" : draft.fromBuild ? "build" : null);
+      clearPlannerDraft();
+    }
+  }, []);
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const quizPrefs = useMemo(() => loadQuiz(), [contextSource]);
+  const aiContext = useMemo(
+    () => (quizPrefs ? buildPlannerContext(quizPrefs) : null),
+    [quizPrefs]
+  );
 
   const toggleInterest = (id) => {
     setForm((f) => ({
@@ -153,8 +196,16 @@ export default function Planner() {
       ? Math.max(0, Math.ceil((new Date(form.endDate) - new Date(form.startDate)) / 86400000))
       : 0;
 
+  const vague = isVagueDestination(form.destination);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (vague) {
+      setError(
+        "Try a city, country, or region — or take the Travel Quiz to narrow it down."
+      );
+      return;
+    }
     if (!form.destination && !form.startDate) {
       setError("Enter a destination or travel dates to get started.");
       return;
@@ -163,10 +214,12 @@ export default function Planner() {
     setLoading(true);
     setResult(null);
     try {
-      const res = await api.post("/planner/generate", {
+      const payload = {
         ...form,
         budget: form.budget ? Number(form.budget) : null,
-      });
+      };
+      if (aiContext) payload.context = aiContext;
+      const res = await api.post("/planner/generate", payload);
       setResult(res.data);
     } catch (err) {
       setError(err.response?.data?.error?.message || "Could not generate a plan.");
@@ -193,9 +246,62 @@ export default function Planner() {
           </p>
         </header>
 
+        {!result && contextSource && (
+          <div className="plan-context-banner">
+            <div className="plan-context-banner__icon" aria-hidden="true">
+              <Icon.Sparkle width="18" height="18" />
+            </div>
+            <div className="plan-context-banner__body">
+              <strong>
+                {contextSource === "quiz"
+                  ? "Your quiz answers are loaded."
+                  : "Your trip-builder answers are loaded."}
+              </strong>
+              <span>
+                We've pre-filled the planner so you don't repeat yourself.
+                {aiContext ? ` ${aiContext}` : ""}
+              </span>
+            </div>
+          </div>
+        )}
+
+        {!result && !contextSource && hasQuiz() && (
+          <div className="plan-context-banner plan-context-banner--soft">
+            <div className="plan-context-banner__body">
+              <strong>You took our Travel Quiz.</strong>
+              <span>Use those answers to refine this plan.</span>
+            </div>
+            <button
+              type="button"
+              className="btn btn-outline btn-sm"
+              onClick={() => navigate("/quiz/results")}
+            >
+              See my matches
+            </button>
+          </div>
+        )}
+
         {!result && (
           <form onSubmit={handleSubmit} className="plan-form">
             {error && <div className="alert alert-error">{error}</div>}
+
+            {vague && (
+              <div className="plan-vague">
+                <div>
+                  <strong>Not sure where to go?</strong>
+                  <span>
+                    Take our quick Travel Quiz and we'll narrow it down for you.
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  onClick={() => navigate("/quiz")}
+                >
+                  Take the Travel Quiz
+                </button>
+              </div>
+            )}
 
             <div className="plan-form__grid">
               <div className="plan-field plan-field--wide">
@@ -364,14 +470,24 @@ export default function Planner() {
             </section>
 
             <div className="plan-result__actions">
-              <button className="btn btn-outline" onClick={reset}>
-                Plan another trip
-              </button>
               <button
                 className="btn btn-primary"
+                onClick={() =>
+                  navigate(
+                    `/packages${form.destination ? `?destination=${encodeURIComponent(form.destination)}` : ""}`
+                  )
+                }
+              >
+                View Packages
+              </button>
+              <button
+                className="btn btn-outline"
                 onClick={() => navigate("/dashboard")}
               >
-                Go to dashboard
+                Customize Further
+              </button>
+              <button className="btn btn-ghost" onClick={reset}>
+                Plan another trip
               </button>
             </div>
           </div>

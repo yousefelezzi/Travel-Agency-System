@@ -1,5 +1,24 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
+import MiniChat from "../components/MiniChat";
+
+const FAVORITES_KEY = "atlas_favorites";
+
+const loadFavorites = () => {
+  try {
+    const raw = localStorage.getItem(FAVORITES_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+};
+const saveFavorites = (list) => {
+  try {
+    localStorage.setItem(FAVORITES_KEY, JSON.stringify(list));
+  } catch {
+    // ignore
+  }
+};
 
 const heroTrips = [
   {
@@ -182,6 +201,33 @@ export default function Home() {
     travelers: "2",
     tripClass: "roundtrip",
   });
+  const [favorites, setFavorites] = useState([]);
+  const [chatOpen, setChatOpen] = useState(false);
+
+  useEffect(() => {
+    setFavorites(loadFavorites());
+  }, []);
+
+  const toggleFavorite = (city) => {
+    setFavorites((prev) => {
+      const next = prev.includes(city)
+        ? prev.filter((c) => c !== city)
+        : [...prev, city];
+      saveFavorites(next);
+      return next;
+    });
+  };
+
+  const goToPackages = (city = "") => {
+    navigate(city ? `/packages?destination=${encodeURIComponent(city)}` : "/packages");
+  };
+
+  const goToDestination = (city) => {
+    if (!city) return;
+    navigate(`/destination/${city.toLowerCase()}`);
+  };
+
+  const contactExpert = () => setChatOpen(true);
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -243,9 +289,9 @@ export default function Home() {
               <button
                 type="button"
                 className="btn-cta btn-cta-hero-primary"
-                onClick={() => navigate("/flights")}
+                onClick={() => navigate("/build")}
               >
-                Book Your Flight
+                Build My Trip
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M5 12h14M12 5l7 7-7 7" />
                 </svg>
@@ -255,7 +301,7 @@ export default function Home() {
                 className="btn-cta btn-cta-hero-secondary"
                 onClick={() => navigate("/planner")}
               >
-                Build My Trip
+                Plan with AI
               </button>
             </div>
           </div>
@@ -449,6 +495,58 @@ export default function Home() {
         </form>
       </section>
 
+      {/* ========== TRAVEL QUIZ ========== */}
+      <section className="quiz-promo-wrap">
+        <div className="quiz-promo">
+          <div className="quiz-promo-media">
+            <img
+              src="https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=1400&q=80&auto=format&fit=crop"
+              alt=""
+              onError={handleImgError("https://picsum.photos/seed/quiz-passport/1400/900")}
+              loading="lazy"
+            />
+            <div className="quiz-promo-veil" aria-hidden="true" />
+          </div>
+          <div className="quiz-promo-body">
+            <span className="quiz-promo-eyebrow">
+              <span className="quiz-promo-dot" />
+              Travel concierge
+            </span>
+            <h2 className="quiz-promo-title">Not sure where to go?</h2>
+            <p className="quiz-promo-sub">
+              Answer a few quick questions and we'll match you with trips that fit
+              your style, budget, and travel mood.
+            </p>
+            <div className="quiz-promo-meta">
+              <div className="quiz-promo-stat">
+                <strong>7</strong>
+                <span>quick questions</span>
+              </div>
+              <span className="quiz-promo-divider" />
+              <div className="quiz-promo-stat">
+                <strong>~90s</strong>
+                <span>to finish</span>
+              </div>
+              <span className="quiz-promo-divider" />
+              <div className="quiz-promo-stat">
+                <strong>5</strong>
+                <span>tailored matches</span>
+              </div>
+            </div>
+            <button
+              type="button"
+              className="btn-cta btn-cta-quiz"
+              onClick={() => navigate("/quiz")}
+            >
+              Take the Travel Quiz
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M5 12h14M12 5l7 7-7 7" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      </section>
+
       {/* ========== MARQUEE ========== */}
       <section className="marquee" aria-hidden="true">
         <div className="marquee-track">
@@ -486,7 +584,11 @@ export default function Home() {
               <em>curated by humans.</em>
             </h2>
           </div>
-          <button type="button" className="section-link">
+          <button
+            type="button"
+            className="section-link"
+            onClick={() => goToPackages()}
+          >
             View all 120+
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M5 12h14M12 5l7 7-7 7" />
@@ -494,48 +596,69 @@ export default function Home() {
           </button>
         </div>
         <div className="dest-bento">
-          {destinations.map((d, i) => (
-            <article key={d.city} className={`dest-card dest-card-${i + 1}`}>
-              <img
-                className="dest-img"
-                src={d.image}
-                alt={`${d.city}, ${d.country}`}
-                onError={handleImgError(d.fallback)}
-                loading="lazy"
-              />
-              <div className="dest-veil" aria-hidden="true" />
-              <span className="dest-num">
-                {String(i + 1).padStart(2, "0")}
-              </span>
-              <button
-                type="button"
-                className="dest-heart"
-                aria-label={`Save ${d.city}`}
+          {destinations.map((d, i) => {
+            const isSaved = favorites.includes(d.city);
+            return (
+              <article
+                key={d.city}
+                className={`dest-card dest-card-${i + 1}`}
+                onClick={() => goToDestination(d.city)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    goToDestination(d.city);
+                  }
+                }}
+                role="button"
+                tabIndex={0}
+                aria-label={`Explore ${d.city}`}
               >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78z" />
-                </svg>
-              </button>
-              <div className="dest-body">
-                <div className="dest-head">
-                  <h3>{d.city}</h3>
-                  <span className="dest-country">{d.country}</span>
-                </div>
-                <div className="dest-foot">
-                  <div className="dest-price">
-                    <span>{d.nights}N from</span>
-                    <strong>${d.price}</strong>
+                <img
+                  className="dest-img"
+                  src={d.image}
+                  alt={`${d.city}, ${d.country}`}
+                  onError={handleImgError(d.fallback)}
+                  loading="lazy"
+                />
+                <div className="dest-veil" aria-hidden="true" />
+                <span className="dest-num">
+                  {String(i + 1).padStart(2, "0")}
+                </span>
+                <button
+                  type="button"
+                  className={`dest-heart ${isSaved ? "is-saved" : ""}`}
+                  aria-label={`${isSaved ? "Unsave" : "Save"} ${d.city}`}
+                  aria-pressed={isSaved}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleFavorite(d.city);
+                  }}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill={isSaved ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78z" />
+                  </svg>
+                </button>
+                <div className="dest-body">
+                  <div className="dest-head">
+                    <h3>{d.city}</h3>
+                    <span className="dest-country">{d.country}</span>
                   </div>
-                  <span className="dest-cta">
-                    Explore
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M5 12h14M12 5l7 7-7 7" />
-                    </svg>
-                  </span>
+                  <div className="dest-foot">
+                    <div className="dest-price">
+                      <span>{d.nights}N from</span>
+                      <strong>${d.price}</strong>
+                    </div>
+                    <span className="dest-cta">
+                      Explore
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M5 12h14M12 5l7 7-7 7" />
+                      </svg>
+                    </span>
+                  </div>
                 </div>
-              </div>
-            </article>
-          ))}
+              </article>
+            );
+          })}
         </div>
       </section>
 
@@ -556,7 +679,11 @@ export default function Home() {
               </div>
             </div>
           </div>
-          <button type="button" className="btn-cta btn-cta-accent mid-cta-btn">
+          <button
+            type="button"
+            className="btn-cta btn-cta-accent mid-cta-btn"
+            onClick={() => navigate("/build")}
+          >
             Start planning your trip
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M5 12h14M12 5l7 7-7 7" />
@@ -677,8 +804,20 @@ export default function Home() {
               travel without the stress &mdash; we'll handle the rest.
             </p>
             <div className="cta-actions">
-              <button type="button" className="btn-cta btn-cta-accent">Plan smarter with ATLAS</button>
-              <button type="button" className="btn-cta btn-cta-ghost-light">Talk to an expert</button>
+              <button
+                type="button"
+                className="btn-cta btn-cta-accent"
+                onClick={() => navigate("/build")}
+              >
+                Plan smarter with ATLAS
+              </button>
+              <button
+                type="button"
+                className="btn-cta btn-cta-ghost-light"
+                onClick={contactExpert}
+              >
+                Talk to an expert
+              </button>
             </div>
           </div>
         </div>
@@ -697,21 +836,21 @@ export default function Home() {
           <div className="footer-cols">
             <div className="footer-col">
               <h4>Company</h4>
-              <span>About</span>
-              <span>Careers</span>
-              <span>Press</span>
+              <Link to="/build">Build a trip</Link>
+              <Link to="/quiz">Travel quiz</Link>
+              <Link to="/planner">AI planner</Link>
             </div>
             <div className="footer-col">
               <h4>Product</h4>
-              <span>Flights</span>
-              <span>Hotels</span>
-              <span>Packages</span>
+              <Link to="/flights">Flights</Link>
+              <Link to="/hotels">Hotels</Link>
+              <Link to="/packages">Packages</Link>
             </div>
             <div className="footer-col">
               <h4>Support</h4>
-              <span>Help center</span>
-              <span>Contact</span>
-              <span>Terms</span>
+              <a href="mailto:concierge@atlas.com">Contact</a>
+              <a href="mailto:concierge@atlas.com?subject=Help">Help center</a>
+              <Link to="/login">Sign in</Link>
             </div>
           </div>
         </div>
@@ -719,6 +858,8 @@ export default function Home() {
           &copy; 2026 ATLAS &middot; Crafted for travelers.
         </div>
       </footer>
+
+      <MiniChat open={chatOpen} onClose={() => setChatOpen(false)} />
     </div>
   );
 }

@@ -84,10 +84,14 @@ function trimForPrompt(candidates) {
 async function generateWithClaude(prefs, candidates) {
   const days = computeDays(prefs.startDate, prefs.endDate);
 
+  const contextLine = prefs.context
+    ? `\nAdditional context from the traveler's profile / quiz:\n${prefs.context}\n`
+    : "";
+
   const prompt = `You are a premium travel planner for ATLAS (Travel Agency System).
 
 Plan a trip using ONLY the real options below. Pick the single best flight and hotel (and optionally a package) that match the traveler's preferences. Then create a concise day-by-day itinerary.
-
+${contextLine}
 Traveler preferences:
 ${JSON.stringify(prefs, null, 2)}
 

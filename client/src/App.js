@@ -13,6 +13,10 @@ import Payment from "./pages/Payment";
 import Dashboard from "./pages/Dashboard";
 import BookingDetails from "./pages/BookingDetails";
 import Planner from "./pages/Planner";
+import Quiz from "./pages/Quiz";
+import QuizResults from "./pages/QuizResults";
+import Build from "./pages/Build";
+import Destination from "./pages/Destination";
 import "./App.css";
 
 function App() {
@@ -28,6 +32,10 @@ function App() {
             <Route path="/flights" element={<Flights />} />
             <Route path="/hotels" element={<Hotels />} />
             <Route path="/packages" element={<Packages />} />
+            <Route path="/quiz" element={<Quiz />} />
+            <Route path="/quiz/results" element={<QuizResults />} />
+            <Route path="/build" element={<Build />} />
+            <Route path="/destination/:slug" element={<Destination />} />
             <Route
               path="/book"
               element={
