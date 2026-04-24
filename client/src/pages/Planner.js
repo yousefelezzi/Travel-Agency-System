@@ -149,6 +149,20 @@ const summarize = (prefs, destinationName) => {
 };
 
 const fmtMoney = (n) => `$${Number(n || 0).toFixed(2)}`;
+
+// Central display helper — never show "$0" when data is missing or invalid.
+// Returns either a money string or a placeholder.
+const displayTotal = (n) => {
+  if (n === null || n === undefined) return "Price unavailable";
+  const num = Number(n);
+  if (!Number.isFinite(num) || num <= 0) return "Price unavailable";
+  return `$${num.toFixed(2)}`;
+};
+
+// Helper to detect whether a plan actually has any priced picks. Used to
+// decide whether the booking CTAs are usable.
+const planHasInventory = (plan) =>
+  !!(plan && (plan.chosenFlight || plan.chosenHotel || plan.chosenPackage));
 const fmtDate = (d) =>
   new Date(d).toLocaleDateString([], { month: "short", day: "numeric" });
 const fmtTime = (d) =>
@@ -483,18 +497,49 @@ export default function Planner() {
 
   const refinePlan = async (instruction, history = []) => {
     if (!planEnvelope) throw new Error("No plan to refine");
+    const isDev = process.env.NODE_ENV !== "production";
+
     // Strip hydrated full records from the plan we send back — server hydrates again
     const { chosenFlight, chosenHotel, chosenPackage, ...slim } = planEnvelope.plan;
+
+    if (isDev) {
+      console.log("[planner.refine] BEFORE", {
+        instruction,
+        flightId: slim.chosenFlightId,
+        hotelId: slim.chosenHotelId,
+        packageId: slim.chosenPackageId,
+        days: slim.days?.length,
+        extrasTotal: slim.extrasTotal,
+        estimatedTotal: slim.estimatedTotal,
+      });
+    }
+
     const res = await api.post("/planner/refine", {
       prefs: { ...form, context: aiContext },
       plan: slim,
       instruction,
       history,
     });
+
     const prevTotal =
       typeof res.data.previousTotal === "number"
         ? res.data.previousTotal
         : Number(planEnvelope.plan.estimatedTotal) || 0;
+
+    if (isDev) {
+      console.log("[planner.refine] AFTER", {
+        change: res.data.change,
+        previousTotal: prevTotal,
+        newTotal: res.data.plan.estimatedTotal,
+        flightId: res.data.plan.chosenFlightId,
+        hotelId: res.data.plan.chosenHotelId,
+        packageId: res.data.plan.chosenPackageId,
+        days: res.data.plan.days?.length,
+        extrasTotal: res.data.plan.extrasTotal,
+        delta: Number(res.data.plan.estimatedTotal) - prevTotal,
+      });
+    }
+
     setPreviousTotal(prevTotal);
     setPlanEnvelope((prev) => ({
       ...prev,
@@ -774,9 +819,10 @@ export default function Planner() {
                   className={`plan-result__total ${isHighlighted ? "plan-result__total--flash" : ""}`}
                 >
                   <span>Estimated total</span>
-                  <strong>{fmtMoney(planEnvelope.plan.estimatedTotal)}</strong>
+                  <strong>{displayTotal(planEnvelope.plan.estimatedTotal)}</strong>
                   {isHighlighted &&
                     previousTotal != null &&
+                    Number(planEnvelope.plan.estimatedTotal) > 0 &&
                     Math.abs(
                       Number(planEnvelope.plan.estimatedTotal) - previousTotal
                     ) > 0.01 && (
@@ -793,11 +839,11 @@ export default function Planner() {
                 <PlanPick kind="package" item={planEnvelope.plan.chosenPackage} navigate={navigate} travelers={form.travelers} nights={nights} highlight={isHighlighted} />
               </div>
 
-              {(!planEnvelope.plan.chosenFlight &&
-                !planEnvelope.plan.chosenHotel &&
-                !planEnvelope.plan.chosenPackage) && (
+              {!planHasInventory(planEnvelope.plan) && (
                 <div className="alert alert-info plan-empty-picks">
-                  No matching inventory for that destination yet — but here's a suggested itinerary anyway.
+                  No matching flights, stays, or packages in our inventory for that
+                  destination yet — that's why the total above reads "Price unavailable."
+                  Here's a suggested itinerary anyway, or try a different destination.
                 </div>
               )}
 

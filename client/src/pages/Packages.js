@@ -309,12 +309,27 @@ export default function Packages() {
         ) : (
           <div className="packages-grid">
             {filteredSorted.map((p, idx) => {
-              const hasDiscount = Number(p.discount) > 0;
-              const originalPrice = Number(p.price);
-              const finalPrice = originalPrice * (1 - Number(p.discount || 0) / 100);
+              const rawPrice = p.price ?? null;
+              const parsedPrice =
+                rawPrice !== null && rawPrice !== "" && Number.isFinite(Number(rawPrice))
+                  ? Number(rawPrice)
+                  : null;
+              const hasValidPrice = parsedPrice !== null && parsedPrice > 0;
+              const hasDiscount = hasValidPrice && Number(p.discount) > 0;
+              const originalPrice = hasValidPrice ? parsedPrice : 0;
+              const finalPrice = hasValidPrice
+                ? originalPrice * (1 - Number(p.discount || 0) / 100)
+                : 0;
               const savings = originalPrice - finalPrice;
               const cue = emotionalCue(p);
               const imgSrc = packageImage(p, idx);
+
+              if (!hasValidPrice && process.env.NODE_ENV !== "production") {
+                console.warn(
+                  "[packages] Package missing or invalid price — rendering as Price on request",
+                  { id: p.id, name: p.packageName, price: p.price }
+                );
+              }
 
               return (
                 <article
@@ -372,10 +387,23 @@ export default function Packages() {
 
                     <div className="package-card-footer">
                       <div className="package-card-price-block">
-                        {hasDiscount && <div className="package-card-original">${originalPrice.toFixed(0)}</div>}
-                        <div className="package-card-price">${finalPrice.toFixed(0)}</div>
-                        <div className="package-card-price-unit">/ person</div>
-                        {hasDiscount && <div className="package-card-savings">You save ${savings.toFixed(0)}</div>}
+                        {hasValidPrice ? (
+                          <>
+                            {hasDiscount && (
+                              <div className="package-card-original">${originalPrice.toFixed(0)}</div>
+                            )}
+                            <div className="package-card-price">${finalPrice.toFixed(0)}</div>
+                            <div className="package-card-price-unit">/ person</div>
+                            {hasDiscount && (
+                              <div className="package-card-savings">You save ${savings.toFixed(0)}</div>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            <div className="package-card-price">Price on request</div>
+                            <div className="package-card-price-unit">contact us</div>
+                          </>
+                        )}
                       </div>
                       <button className="package-book-btn" onClick={(e) => { e.stopPropagation(); navigate(`/book?type=package&id=${p.id}`); }}>
                         View Trip

@@ -54,26 +54,56 @@ const ACTIVITY_LABEL = {
 
 const overlap = (a = [], b = []) => a.filter((x) => b.includes(x)).length;
 
+// Hard filters: when the user makes a deliberate choice, we don't
+// recommend destinations that contradict it. Returns null when the
+// destination should be excluded entirely.
+const passesHardFilters = (dest, prefs) => {
+  if (
+    prefs.budget &&
+    Array.isArray(dest.tags.budget) &&
+    !dest.tags.budget.includes(prefs.budget)
+  ) {
+    return false;
+  }
+  if (
+    prefs.region &&
+    prefs.region !== "anywhere" &&
+    dest.region !== prefs.region &&
+    dest.region !== "anywhere"
+  ) {
+    return false;
+  }
+  if (
+    prefs.climate &&
+    prefs.climate !== "any" &&
+    dest.tags.climate &&
+    dest.tags.climate !== "any" &&
+    dest.tags.climate !== prefs.climate
+  ) {
+    return false;
+  }
+  return true;
+};
+
 const scoreDestination = (dest, prefs) => {
   let score = 0;
   const reasons = [];
 
-  // Vibe (multi-select) — 0–4 pts
+  // Vibe (multi-select) — 0–12 pts (heavy driver)
   const vibeHits = overlap(prefs.vibe || [], dest.tags.vibe || []);
   if (vibeHits > 0) {
-    score += vibeHits * 2;
+    score += vibeHits * 3;
     const matched = (prefs.vibe || []).filter((v) => dest.tags.vibe.includes(v));
     reasons.push(`matches your ${matched.map((v) => VIBE_LABEL[v] || v).join(" + ")} vibe`);
+  } else if (prefs.vibe && prefs.vibe.length > 0) {
+    // Penalize destinations with zero vibe overlap when the user picked vibes
+    score -= 4;
   }
 
-  // Budget — 0–3 pts
-  if (prefs.budget) {
-    if (dest.tags.budget?.includes(prefs.budget)) {
-      score += 3;
-      reasons.push(`fits your ${BUDGET_LABEL[prefs.budget]} budget`);
-    } else {
-      score -= 1;
-    }
+  // Budget — already hard-filtered, but reward as a positive reason
+  if (prefs.budget && dest.tags.budget?.includes(prefs.budget)) {
+    score += 3;
+    reasons.push(`fits your ${BUDGET_LABEL[prefs.budget]} budget`);
   }
 
   // Duration — 0–2 pts
@@ -88,17 +118,15 @@ const scoreDestination = (dest, prefs) => {
     reasons.push(`great for ${GROUP_LABEL[prefs.groupType]}`);
   }
 
-  // Climate — 0–2 pts
+  // Climate — already hard-filtered, but reward exact match
   if (prefs.climate && prefs.climate !== "any") {
     if (dest.tags.climate === prefs.climate) {
       score += 2;
       reasons.push(`has the ${CLIMATE_LABEL[prefs.climate]} you wanted`);
     }
-  } else if (prefs.climate === "any") {
-    score += 0.5;
   }
 
-  // Activities — 0–6 pts
+  // Activities — 0–9+ pts
   const actHits = overlap(prefs.activities || [], dest.tags.activities || []);
   if (actHits > 0) {
     score += actHits * 1.5;
@@ -108,15 +136,11 @@ const scoreDestination = (dest, prefs) => {
     reasons.push(`built for ${matched.map((a) => ACTIVITY_LABEL[a] || a).join(", ")}`);
   }
 
-  // Region — 0–2 pts
-  if (prefs.region) {
-    if (prefs.region === "anywhere" || dest.region === prefs.region) {
-      score += prefs.region === "anywhere" ? 0.5 : 2;
-      if (prefs.region !== "anywhere") {
-        reasons.push(`in ${REGION_LABEL[prefs.region]}`);
-      }
-    } else {
-      score -= 1;
+  // Region — already hard-filtered, but reward exact (non-"anywhere") match
+  if (prefs.region && prefs.region !== "anywhere") {
+    if (dest.region === prefs.region) {
+      score += 2;
+      reasons.push(`in ${REGION_LABEL[prefs.region]}`);
     }
   }
 
@@ -139,19 +163,45 @@ const fitLabel = (score, max) => {
   return "Worth a look";
 };
 
-export const recommend = (prefs, limit = 5) => {
-  if (!prefs) return [];
-  const ranked = DESTINATIONS.map((d) => {
-    const { score, reasons } = scoreDestination(d, prefs);
-    return {
-      destination: d,
-      score,
-      why: composeWhy(prefs, reasons),
-      reasons,
-    };
-  })
+const rankPool = (pool, prefs) =>
+  pool
+    .map((d) => {
+      const { score, reasons } = scoreDestination(d, prefs);
+      return {
+        destination: d,
+        score,
+        why: composeWhy(prefs, reasons),
+        reasons,
+      };
+    })
     .sort((a, b) => b.score - a.score)
     .filter((r) => r.score > 0);
+
+export const recommend = (prefs, limit = 5) => {
+  if (!prefs) return [];
+
+  // 1. Hard filters first.
+  const eligible = DESTINATIONS.filter((d) => passesHardFilters(d, prefs));
+  let ranked = rankPool(eligible, prefs);
+
+  // 2. If the constraints were too tight, progressively relax them so the
+  //    user gets *something* instead of an empty list. Start by dropping
+  //    climate (most flexible), then region, then budget (most important).
+  if (ranked.length === 0) {
+    const relaxedClimate = DESTINATIONS.filter((d) =>
+      passesHardFilters(d, { ...prefs, climate: "any" })
+    );
+    ranked = rankPool(relaxedClimate, prefs);
+  }
+  if (ranked.length === 0) {
+    const relaxedRegion = DESTINATIONS.filter((d) =>
+      passesHardFilters(d, { ...prefs, climate: "any", region: "anywhere" })
+    );
+    ranked = rankPool(relaxedRegion, prefs);
+  }
+  if (ranked.length === 0) {
+    ranked = rankPool(DESTINATIONS, prefs);
+  }
 
   const top = ranked.slice(0, limit);
   const max = top[0]?.score || 1;

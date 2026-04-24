@@ -299,6 +299,12 @@ The traveler just said:
 
 Update the plan to satisfy the request. Keep what already works; change only what the request asks for. If the request is to change destination, swap to one that matches the traveler's vibe. If "cheaper" — swap to lower-priced flight/hotel and trim costly activities. If "luxury" — pick higher-rated stays. If "shorter/longer" — adjust days array.
 
+CRITICAL HONESTY RULES:
+- If the inventory above doesn't actually let you do the request (e.g. user asks "make flight cheaper" but the current chosenFlightId is already the cheapest economyPrice), DO NOT pretend you swapped. Keep the current chosen IDs and write the "change" field as something like: "No cheaper flight is currently available for this route — already on the lowest fare."
+- Same rule for hotels, packages, and destination swaps.
+- Never invent IDs not present in the inventory above.
+- Always pick chosenFlightId and chosenHotelId from the inventory IDs above, or set them to null. Don't make IDs up.
+
 Return ONLY valid JSON with this schema:
 {
   "summary": "...",
@@ -348,22 +354,44 @@ async function refineFallback({ prefs, plan, instruction, candidates }) {
   if (text.includes("cheap") || text.includes("budget") || text.includes("less")) {
     const cheapFlight = [...candidates.flights].sort((a, b) => a.economyPrice - b.economyPrice)[0];
     const cheapHotel = [...candidates.hotels].sort((a, b) => a.pricePerNight - b.pricePerNight)[0];
+
+    const flightSwapped = cheapFlight && cheapFlight.id !== next.chosenFlightId;
+    const hotelSwapped = cheapHotel && cheapHotel.id !== next.chosenHotelId;
+
     if (cheapFlight) next.chosenFlightId = cheapFlight.id;
     if (cheapHotel) next.chosenHotelId = cheapHotel.id;
     // Wipe extras when going cheap
+    const hadExtras = (next.extrasTotal || 0) > 0;
     next.extrasTotal = 0;
-    change = "Swapped in the lowest-priced flight and stay, and trimmed extras.";
+
+    if (!flightSwapped && !hotelSwapped && !hadExtras) {
+      change = "You're already on the lowest-priced flight + stay we have. No cheaper option to swap to right now.";
+    } else {
+      const parts = [];
+      if (flightSwapped) parts.push("flight");
+      if (hotelSwapped) parts.push("stay");
+      if (hadExtras) parts.push("extras");
+      change = `Trimmed your ${parts.join(", ")} to the lowest-priced inventory.`;
+    }
   } else if (text.includes("luxury") || text.includes("upgrade")) {
     const lux = [...candidates.hotels]
       .sort((a, b) => (b.starRating || 0) - (a.starRating || 0) || b.pricePerNight - a.pricePerNight)[0];
+
+    const hotelSwapped = lux && lux.id !== next.chosenHotelId;
+
     if (lux) next.chosenHotelId = lux.id;
-    // Bump extras with a luxury concierge fee
-    next.extrasTotal = (next.extrasTotal || 0) + EXTRA_PRICING.luxuryFee;
-    next.days = (next.days || []).map((d) => ({
-      ...d,
-      activities: [...(d.activities || []), "Private guide & premium tasting"],
-    }));
-    change = `Upgraded to our top-rated stay and added a luxury concierge ($${EXTRA_PRICING.luxuryFee}).`;
+
+    if (!hotelSwapped) {
+      change = "You're already booked into our top-rated stay for this destination — nothing to upgrade to.";
+    } else {
+      // Bump extras with a luxury concierge fee
+      next.extrasTotal = (next.extrasTotal || 0) + EXTRA_PRICING.luxuryFee;
+      next.days = (next.days || []).map((d) => ({
+        ...d,
+        activities: [...(d.activities || []), "Private guide & premium tasting"],
+      }));
+      change = `Upgraded to our top-rated stay and added a luxury concierge ($${EXTRA_PRICING.luxuryFee}).`;
+    }
   } else if (text.includes("nightlife") || text.includes("party")) {
     next.days = (next.days || []).map((d) => ({
       ...d,

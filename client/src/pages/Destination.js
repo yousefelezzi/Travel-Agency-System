@@ -181,10 +181,17 @@ export default function Destination() {
         ) : (
           <div className="packages-grid dest-detail-packages">
             {packages.map((p, idx) => {
-              const hasDiscount = Number(p.discount) > 0;
-              const originalPrice = Number(p.price);
-              const finalPrice =
-                originalPrice * (1 - Number(p.discount || 0) / 100);
+              const rawPrice = p.price ?? null;
+              const parsedPrice =
+                rawPrice !== null && rawPrice !== "" && Number.isFinite(Number(rawPrice))
+                  ? Number(rawPrice)
+                  : null;
+              const hasValidPrice = parsedPrice !== null && parsedPrice > 0;
+              const hasDiscount = hasValidPrice && Number(p.discount) > 0;
+              const originalPrice = hasValidPrice ? parsedPrice : 0;
+              const finalPrice = hasValidPrice
+                ? originalPrice * (1 - Number(p.discount || 0) / 100)
+                : 0;
               return (
                 <article
                   key={p.id}
@@ -232,15 +239,24 @@ export default function Destination() {
                     )}
                     <div className="package-card-footer">
                       <div className="package-card-price-block">
-                        {hasDiscount && (
-                          <div className="package-card-original">
-                            ${originalPrice.toFixed(0)}
-                          </div>
+                        {hasValidPrice ? (
+                          <>
+                            {hasDiscount && (
+                              <div className="package-card-original">
+                                ${originalPrice.toFixed(0)}
+                              </div>
+                            )}
+                            <div className="package-card-price">
+                              ${finalPrice.toFixed(0)}
+                            </div>
+                            <div className="package-card-price-unit">/ person</div>
+                          </>
+                        ) : (
+                          <>
+                            <div className="package-card-price">Price on request</div>
+                            <div className="package-card-price-unit">contact us</div>
+                          </>
                         )}
-                        <div className="package-card-price">
-                          ${finalPrice.toFixed(0)}
-                        </div>
-                        <div className="package-card-price-unit">/ person</div>
                       </div>
                       <button
                         className="package-book-btn"
