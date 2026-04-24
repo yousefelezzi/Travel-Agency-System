@@ -14,6 +14,7 @@ const favoriteRoutes = require("./routes/favorite.routes");
 const paymentRoutes = require("./routes/payment.routes");
 const plannerRoutes = require("./routes/planner.routes");
 const chatRoutes = require("./routes/chat.routes");
+const supportRoutes = require("./routes/support.routes");
 
 const app = express();
 const PORT = process.env.PORT || 5001;
@@ -34,6 +35,7 @@ app.use("/api/favorites", favoriteRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/api/planner", plannerRoutes);
 app.use("/api/chat", chatRoutes);
+app.use("/api/support", supportRoutes);
 
 // Health check
 app.get("/api/health", async (req, res) => {

@@ -158,6 +158,18 @@ export default function BookingDetails() {
   const [error, setError] = useState("");
   const [cancelling, setCancelling] = useState(false);
 
+  // Cancel modal state
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [quote, setQuote] = useState(null);
+  const [quoteLoading, setQuoteLoading] = useState(false);
+  const [quoteError, setQuoteError] = useState("");
+
+  // Modify modal state
+  const [modifyOpen, setModifyOpen] = useState(false);
+  const [modifyDrafts, setModifyDrafts] = useState({}); // { itemId: { checkIn, checkOut } }
+  const [modifyBusy, setModifyBusy] = useState(false);
+  const [modifyError, setModifyError] = useState("");
+
   const fetchBooking = async () => {
     try {
       const res = await api.get(`/bookings/${id}`);
@@ -172,28 +184,111 @@ export default function BookingDetails() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { fetchBooking(); }, [id]);
 
-  const handleCancel = async () => {
-    const isPaid = booking.status === "CONFIRMED";
-    const msg = isPaid
-      ? "Cancel this booking? A 20% cancellation fee applies."
-      : "Cancel this unpaid booking?";
-    if (!window.confirm(msg)) return;
+  const openCancelModal = async () => {
+    setCancelOpen(true);
+    setQuote(null);
+    setQuoteError("");
+    setQuoteLoading(true);
+    try {
+      const res = await api.get(`/bookings/${booking.id}/cancellation-quote`);
+      setQuote(res.data.quote);
+    } catch (err) {
+      setQuoteError(
+        err.response?.data?.error?.message || "Couldn't load cancellation policy."
+      );
+    } finally {
+      setQuoteLoading(false);
+    }
+  };
 
+  const confirmCancel = async () => {
     setCancelling(true);
     try {
-      const res = await api.post(`/bookings/${booking.id}/cancel`);
-      if (isPaid) {
-        alert(`Booking cancelled. Refund: $${res.data.refundAmount.toFixed(2)} (Fee: $${res.data.cancellationFee.toFixed(2)})`);
-      } else {
-        alert("Booking cancelled.");
-      }
+      await api.post(`/bookings/${booking.id}/cancel`);
+      setCancelOpen(false);
       fetchBooking();
     } catch (err) {
-      alert(err.response?.data?.error?.message || "Cancel failed");
+      setQuoteError(err.response?.data?.error?.message || "Cancel failed");
     } finally {
       setCancelling(false);
     }
   };
+
+  const openModifyModal = () => {
+    const drafts = {};
+    (booking.items || []).forEach((i) => {
+      if (i.hotelId) {
+        drafts[i.id] = {
+          checkIn: i.checkIn ? i.checkIn.slice(0, 10) : "",
+          checkOut: i.checkOut ? i.checkOut.slice(0, 10) : "",
+        };
+      }
+    });
+    setModifyDrafts(drafts);
+    setModifyError("");
+    setModifyOpen(true);
+  };
+
+  const submitModify = async () => {
+    const updates = Object.entries(modifyDrafts)
+      .filter(([, v]) => v.checkIn && v.checkOut)
+      .map(([id, v]) => ({
+        id,
+        checkIn: v.checkIn,
+        checkOut: v.checkOut,
+      }));
+    if (updates.length === 0) {
+      setModifyError("Pick new dates for at least one stay.");
+      return;
+    }
+    for (const u of updates) {
+      if (new Date(u.checkOut) <= new Date(u.checkIn)) {
+        setModifyError("Check-out must be after check-in.");
+        return;
+      }
+    }
+    setModifyBusy(true);
+    setModifyError("");
+    try {
+      await api.put(`/bookings/${booking.id}/modify`, { items: updates });
+      setModifyOpen(false);
+      fetchBooking();
+    } catch (err) {
+      setModifyError(
+        err.response?.data?.error?.message || "Modification failed."
+      );
+    } finally {
+      setModifyBusy(false);
+    }
+  };
+
+  const fmtMoneyLocal = (n) => `$${Number(n || 0).toFixed(2)}`;
+
+  const downloadInvoice = async () => {
+    try {
+      const res = await api.get(`/bookings/${booking.id}/invoice.pdf`, {
+        responseType: "blob",
+      });
+      const url = window.URL.createObjectURL(
+        new Blob([res.data], { type: "application/pdf" })
+      );
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `ATLAS-${booking.invoice?.invoiceNumber || booking.id.slice(0, 8)}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      alert(
+        err.response?.data?.error?.message ||
+          "Couldn't download invoice. Make sure payment is complete."
+      );
+    }
+  };
+  const hasHotelItem = (booking?.items || []).some((i) => i.hotelId);
+  const canModify =
+    booking && (booking.status === "CONFIRMED" || booking.status === "PENDING") && hasHotelItem;
 
   if (loading) return <div className="loading">Loading booking...</div>;
   if (error || !booking) {
@@ -265,10 +360,22 @@ export default function BookingDetails() {
                 <strong>{booking.items?.length || 0}</strong>
               </div>
               {booking.invoice && (
-                <div className="bd-summary__row">
-                  <span>Invoice</span>
-                  <strong className="bd-mono">{booking.invoice.invoiceNumber}</strong>
-                </div>
+                <>
+                  <div className="bd-summary__row">
+                    <span>Invoice</span>
+                    <strong className="bd-mono">{booking.invoice.invoiceNumber}</strong>
+                  </div>
+                  <button
+                    type="button"
+                    className="bd-invoice-dl"
+                    onClick={downloadInvoice}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
+                    </svg>
+                    Download invoice (PDF)
+                  </button>
+                </>
               )}
 
               <div className="bd-summary__divider" />
@@ -288,9 +395,17 @@ export default function BookingDetails() {
                       Complete payment
                     </button>
                   )}
+                  {canModify && (
+                    <button
+                      className="btn btn-outline btn-full"
+                      onClick={openModifyModal}
+                    >
+                      Modify booking
+                    </button>
+                  )}
                   <button
                     className="bd-cancel"
-                    onClick={handleCancel}
+                    onClick={openCancelModal}
                     disabled={cancelling}
                   >
                     {cancelling ? "Cancelling…" : "Cancel booking"}
@@ -419,6 +534,152 @@ export default function BookingDetails() {
           </div>
         </div>
       </div>
+
+      {/* ── Cancel booking modal ── */}
+      {cancelOpen && (
+        <div className="bd-modal-backdrop" onClick={() => !cancelling && setCancelOpen(false)}>
+          <div className="bd-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
+            <header className="bd-modal__head">
+              <h3>Cancel this booking?</h3>
+              <button
+                type="button"
+                className="bd-modal__close"
+                onClick={() => !cancelling && setCancelOpen(false)}
+                aria-label="Close"
+              >
+                ×
+              </button>
+            </header>
+            <div className="bd-modal__body">
+              {quoteLoading ? (
+                <p className="bd-modal__muted">Calculating cancellation fee…</p>
+              ) : quoteError ? (
+                <div className="alert alert-error">{quoteError}</div>
+              ) : quote ? (
+                <>
+                  <div className="bd-modal__row">
+                    <span>Booking total</span>
+                    <strong>{fmtMoneyLocal(booking.totalAmount)}</strong>
+                  </div>
+                  <div className="bd-modal__row bd-modal__row--fee">
+                    <span>
+                      Cancellation fee ({quote.feePercent}%)
+                    </span>
+                    <strong>− {fmtMoneyLocal(quote.feeAmount)}</strong>
+                  </div>
+                  <div className="bd-modal__divider" />
+                  <div className="bd-modal__row bd-modal__row--total">
+                    <span>You'll be refunded</span>
+                    <strong>{fmtMoneyLocal(quote.refundAmount)}</strong>
+                  </div>
+                  {quote.reason && (
+                    <p className="bd-modal__reason">{quote.reason}</p>
+                  )}
+                  <p className="bd-modal__muted">
+                    Refund returns to the original payment method (typically 5–10 business days). A confirmation email will be sent.
+                  </p>
+                </>
+              ) : null}
+            </div>
+            <footer className="bd-modal__foot">
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() => setCancelOpen(false)}
+                disabled={cancelling}
+              >
+                Keep booking
+              </button>
+              <button
+                type="button"
+                className="btn btn-danger"
+                onClick={confirmCancel}
+                disabled={cancelling || quoteLoading || !!quoteError}
+              >
+                {cancelling ? "Cancelling…" : "Yes, cancel"}
+              </button>
+            </footer>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modify booking modal ── */}
+      {modifyOpen && (
+        <div className="bd-modal-backdrop" onClick={() => !modifyBusy && setModifyOpen(false)}>
+          <div className="bd-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
+            <header className="bd-modal__head">
+              <h3>Modify your booking</h3>
+              <button
+                type="button"
+                className="bd-modal__close"
+                onClick={() => !modifyBusy && setModifyOpen(false)}
+                aria-label="Close"
+              >
+                ×
+              </button>
+            </header>
+            <div className="bd-modal__body">
+              <p className="bd-modal__muted">
+                Change your stay dates. The total will be recalculated at the nightly rate.
+              </p>
+              {(booking.items || [])
+                .filter((i) => i.hotelId)
+                .map((i) => {
+                  const draft = modifyDrafts[i.id] || { checkIn: "", checkOut: "" };
+                  const set = (key) => (e) =>
+                    setModifyDrafts((d) => ({
+                      ...d,
+                      [i.id]: { ...d[i.id], [key]: e.target.value },
+                    }));
+                  return (
+                    <div key={i.id} className="bd-modify-item">
+                      <div className="bd-modify-item__title">
+                        {i.hotel?.name} <span>· {i.hotel?.city}</span>
+                      </div>
+                      <div className="bd-modify-item__fields">
+                        <label>
+                          <span>Check-in</span>
+                          <input
+                            type="date"
+                            value={draft.checkIn}
+                            onChange={set("checkIn")}
+                          />
+                        </label>
+                        <label>
+                          <span>Check-out</span>
+                          <input
+                            type="date"
+                            value={draft.checkOut}
+                            onChange={set("checkOut")}
+                          />
+                        </label>
+                      </div>
+                    </div>
+                  );
+                })}
+              {modifyError && <div className="alert alert-error">{modifyError}</div>}
+            </div>
+            <footer className="bd-modal__foot">
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() => setModifyOpen(false)}
+                disabled={modifyBusy}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={submitModify}
+                disabled={modifyBusy}
+              >
+                {modifyBusy ? "Saving…" : "Save changes"}
+              </button>
+            </footer>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

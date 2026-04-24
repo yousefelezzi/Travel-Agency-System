@@ -17,6 +17,8 @@ import Quiz from "./pages/Quiz";
 import QuizResults from "./pages/QuizResults";
 import Build from "./pages/Build";
 import Destination from "./pages/Destination";
+import Support from "./pages/Support";
+import AgentDashboard from "./pages/AgentDashboard";
 import "./App.css";
 
 function App() {
@@ -36,6 +38,15 @@ function App() {
             <Route path="/quiz/results" element={<QuizResults />} />
             <Route path="/build" element={<Build />} />
             <Route path="/destination/:slug" element={<Destination />} />
+            <Route path="/support" element={<Support />} />
+            <Route
+              path="/agent"
+              element={
+                <ProtectedRoute roles={["TRAVEL_AGENT", "ADMIN"]}>
+                  <AgentDashboard />
+                </ProtectedRoute>
+              }
+            />
             <Route
               path="/book"
               element={

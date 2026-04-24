@@ -1,5 +1,24 @@
 const prisma = require("../config/db");
 const stripe = require("../config/stripe");
+const { sendBookingConfirmation } = require("../services/notification.service");
+
+// Best-effort confirmation email after a payment succeeds.
+async function fireConfirmationEmail(bookingId) {
+  try {
+    const full = await prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: {
+        items: { include: { flight: true, hotel: true, package: true } },
+        customer: { include: { user: { select: { email: true } } } },
+      },
+    });
+    const email = full?.customer?.user?.email;
+    if (!email) return;
+    await sendBookingConfirmation({ booking: full, customerEmail: email });
+  } catch (err) {
+    console.error("[notifications] confirmation email failed:", err.message);
+  }
+}
 
 // Ensure the booking belongs to the authenticated customer and is payable.
 const loadPayableBooking = async (bookingId, userId) => {
@@ -146,6 +165,7 @@ const confirmPayment = async (req, res, next) => {
       });
     });
 
+    fireConfirmationEmail(booking.id);
     res.json({ message: "Payment confirmed.", booking: updated });
   } catch (error) {
     next(error);
@@ -214,6 +234,7 @@ const mockConfirm = async (req, res, next) => {
       });
     });
 
+    fireConfirmationEmail(booking.id);
     res.json({ message: "Payment confirmed (demo mode).", booking: updated });
   } catch (error) {
     next(error);

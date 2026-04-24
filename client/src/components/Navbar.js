@@ -34,11 +34,12 @@ export default function Navbar() {
           AI Planner
           <span className="nav-pill">new</span>
         </NavLink>
+        <NavLink to="/support">Support</NavLink>
         {user ? (
           <>
             <NavLink to="/dashboard">Dashboard</NavLink>
             {(user.role === "ADMIN" || user.role === "TRAVEL_AGENT") && (
-              <NavLink to="/admin">Admin</NavLink>
+              <NavLink to="/agent">Agent</NavLink>
             )}
             <button onClick={handleLogout} className="btn btn-outline">
               Logout

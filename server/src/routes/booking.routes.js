@@ -4,9 +4,11 @@ const {
   createBooking,
   getMyBookings,
   getBookingById,
+  getCancellationQuote,
   cancelBooking,
   modifyBooking,
   getAllBookings,
+  downloadInvoicePdf,
 } = require("../controllers/booking.controller");
 const { authenticate, authorize } = require("../middleware/auth.middleware");
 
@@ -17,6 +19,8 @@ router.use(authenticate);
 router.post("/", authorize("CUSTOMER"), createBooking);
 router.get("/", authorize("CUSTOMER"), getMyBookings);
 router.get("/:id", getBookingById);
+router.get("/:id/cancellation-quote", getCancellationQuote);
+router.get("/:id/invoice.pdf", downloadInvoicePdf);
 router.post("/:id/cancel", cancelBooking);
 router.put("/:id/modify", modifyBooking);
 
