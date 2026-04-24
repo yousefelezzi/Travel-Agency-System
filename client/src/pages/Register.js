@@ -56,13 +56,23 @@ export default function Register() {
           onError={(e) => { if (e.target.src !== FALLBACK) e.target.src = FALLBACK; }}
         />
         <div className="auth-visual-overlay" />
+        <div className="auth-visual-aurora" aria-hidden="true" />
+        <div className="auth-visual-grain" aria-hidden="true" />
         <div className="auth-visual-content">
           <div className="auth-visual-brand">
             <span className="auth-visual-mark" />
             TAS
           </div>
           <div className="auth-visual-copy">
-            <h2>Plan smarter. Travel better.</h2>
+            <span className="auth-visual-eyebrow">
+              <span className="auth-visual-eyebrow-dot" />
+              Join TAS today
+            </span>
+            <h2>
+              Plan smarter.
+              <br />
+              <em>Travel better.</em>
+            </h2>
             <p>Join 2M+ travelers booking with confidence.</p>
           </div>
           <div className="auth-visual-stats">
@@ -86,8 +96,11 @@ export default function Register() {
       <div className="auth-form-panel">
         <div className="auth-form-inner auth-form-inner-wide">
           <div className="auth-form-header">
-            <h2>Create your TAS account</h2>
-            <p>Start planning smarter trips in minutes</p>
+            <span className="auth-form-eyebrow">— Create account</span>
+            <h2>
+              Create your <em>TAS account.</em>
+            </h2>
+            <p>Start planning smarter trips in minutes.</p>
           </div>
 
           {error && <div className="alert alert-error">{error}</div>}

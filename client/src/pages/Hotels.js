@@ -315,14 +315,15 @@ export default function Hotels() {
         <div className="hotels-hero-inner">
           <span className="hotels-eyebrow">
             <span className="hotels-eyebrow-dot" />
-            Hotels
+            — Find your stay
           </span>
           <h1 className="hotels-title">
-            Where you stay <span className="hotels-title-accent">matters.</span>
+            Where you stay
+            <span className="hotels-title-accent"> matters.</span>
           </h1>
           <p className="hotels-sub">
             Discover hand-picked hotels across 120+ countries. Transparent pricing,
-            verified reviews, and free cancellation on most stays.
+            verified reviews, and <em>free cancellation</em> on most stays.
           </p>
 
           <form className="hotels-search" onSubmit={handleSearch}>
@@ -728,16 +729,23 @@ export default function Hotels() {
           <div className="hotels-popular-inner">
             <div className="section-head">
               <div>
-                <span className="section-eyebrow">Explore by destination</span>
-                <h2 className="section-title">Trending hotel cities</h2>
+                <span className="section-eyebrow">— Explore by destination</span>
+                <h2 className="section-title">
+                  Trending <em>hotel cities.</em>
+                </h2>
               </div>
             </div>
-            <div className="hotels-popular-grid">
-              {POPULAR_CITIES.map((d) => (
+            <div className="hotels-popular-marquee">
+              <div className="hotels-popular-track">
+                {[...POPULAR_CITIES, ...POPULAR_CITIES].map((d, i) => {
+                  const isDup = i >= POPULAR_CITIES.length;
+                  return (
                 <button
-                  key={d.city}
+                  key={i}
                   type="button"
                   className="hotels-popular-card"
+                  aria-hidden={isDup || undefined}
+                  tabIndex={isDup ? -1 : undefined}
                   onClick={() => {
                     setFilters((f) => ({ ...f, city: d.city }));
                     setTimeout(() => search(1), 0);
@@ -757,7 +765,9 @@ export default function Hotels() {
                     <div className="hotels-popular-tag">{d.tag}</div>
                   </div>
                 </button>
-              ))}
+                  );
+                })}
+              </div>
             </div>
           </div>
         </section>

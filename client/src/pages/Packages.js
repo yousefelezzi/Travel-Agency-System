@@ -172,14 +172,15 @@ export default function Packages() {
           <div className="packages-hero-content">
             <span className="packages-eyebrow">
               <span className="packages-eyebrow-dot" />
-              Packages
+              — Curated packages
             </span>
             <h1 className="packages-title">
-              Curated trips, <span className="packages-title-accent">one price.</span>
+              Curated trips,
+              <span className="packages-title-accent"> one price.</span>
             </h1>
             <p className="packages-sub">
-              Flights, hotels, transfers, and experiences — bundled with real
-              savings. Pick a theme, set your budget, go.
+              Flights, hotels, transfers, and experiences — bundled with
+              <em> real savings</em>. Pick a theme, set your budget, go.
             </p>
 
             <form className="packages-search" onSubmit={handleSearch}>
@@ -387,11 +388,14 @@ export default function Packages() {
         <section className="packages-value">
           <div className="packages-value-inner">
             <div className="section-head section-head-center">
-              <span className="section-eyebrow">Why book a package?</span>
-              <h2 className="section-title">More trip, less hassle</h2>
+              <span className="section-eyebrow">— Why book a package?</span>
+              <h2 className="section-title">
+                More trip, <em>less hassle.</em>
+              </h2>
             </div>
             <div className="packages-value-grid">
               <div className="packages-value-card">
+                <span className="packages-value-num">01</span>
                 <div className="packages-value-icon packages-value-icon-teal">
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 1v4M12 19v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M1 12h4M19 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" /></svg>
                 </div>
@@ -399,6 +403,7 @@ export default function Packages() {
                 <p>Packages cost less than booking each component separately. Real discounts, not fake markdowns.</p>
               </div>
               <div className="packages-value-card">
+                <span className="packages-value-num">02</span>
                 <div className="packages-value-icon packages-value-icon-amber">
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-11V5l-8-3-8 3v6c0 7 8 11 8 11z" /><path d="m9 12 2 2 4-4" /></svg>
                 </div>
@@ -406,6 +411,7 @@ export default function Packages() {
                 <p>Flights, stays, transfers, and activities — all confirmed in a single checkout with one invoice.</p>
               </div>
               <div className="packages-value-card">
+                <span className="packages-value-num">03</span>
                 <div className="packages-value-icon packages-value-icon-teal">
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 18v-6a9 9 0 0 1 18 0v6" /><path d="M21 19a2 2 0 0 1-2 2h-1v-6h3v4zM3 19a2 2 0 0 0 2 2h1v-6H3v4z" /></svg>
                 </div>
