@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import api from "../services/api";
 
 /* ── hotel images keyed by city (realistic visual) ── */
@@ -184,6 +184,7 @@ export default function Hotels() {
   const [selectedAmenities, setSelectedAmenities] = useState([]);
   const [freeCancellation, setFreeCancellation] = useState(false);
   const [breakfastIncluded, setBreakfastIncluded] = useState(false);
+  const [searchParams] = useSearchParams();
   const [filters, setFilters] = useState({
     city: "",
     country: "",
@@ -197,22 +198,23 @@ export default function Hotels() {
   const [pagination, setPagination] = useState({});
   const navigate = useNavigate();
 
-  const search = async (page = 1) => {
+  const search = async (page = 1, overrides = null) => {
     setLoading(true);
     try {
+      const f = overrides || filters;
       const params = { page, limit: 12 };
-      if (filters.city) params.city = filters.city;
-      if (filters.country) params.country = filters.country;
-      if (filters.maxPrice) params.maxPrice = filters.maxPrice;
-      if (filters.minRating) params.minRating = filters.minRating;
+      if (f.city) params.city = f.city;
+      if (f.country) params.country = f.country;
+      if (f.maxPrice) params.maxPrice = f.maxPrice;
+      if (f.minRating) params.minRating = f.minRating;
       const res = await api.get("/hotels", { params });
       setHotels(res.data.hotels || []);
       setPagination(res.data.pagination || {});
       setLastQuery({
-        city: filters.city,
-        checkIn: filters.checkIn,
-        checkOut: filters.checkOut,
-        guests: filters.guests,
+        city: f.city,
+        checkIn: f.checkIn,
+        checkOut: f.checkOut,
+        guests: f.guests,
       });
     } catch (err) {
       console.error(err);
@@ -221,7 +223,29 @@ export default function Hotels() {
     }
   };
 
-  useEffect(() => { search(); /* eslint-disable-next-line */ }, []);
+  useEffect(() => {
+    const destUrl =
+      searchParams.get("destination") || searchParams.get("city") || "";
+    const checkInUrl = searchParams.get("checkIn") || "";
+    const checkOutUrl = searchParams.get("checkOut") || "";
+    const guestsUrl = searchParams.get("guests") || searchParams.get("travelers") || "";
+    if (destUrl || checkInUrl || checkOutUrl || guestsUrl) {
+      const initial = {
+        city: destUrl,
+        country: "",
+        checkIn: checkInUrl,
+        checkOut: checkOutUrl,
+        guests: guestsUrl || "2",
+        maxPrice: "",
+        minRating: "",
+      };
+      setFilters(initial);
+      search(1, initial);
+    } else {
+      search();
+    }
+    /* eslint-disable-next-line */
+  }, []);
 
   const handleSearch = (e) => {
     e.preventDefault();

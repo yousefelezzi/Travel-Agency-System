@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import api from "../services/api";
 
 // Map airport code -> country. Used to enrich the API's raw "City (CODE)" strings.
@@ -254,6 +254,7 @@ export default function Flights() {
   const [flights, setFlights] = useState([]);
   const [loading, setLoading] = useState(false);
   const [sort, setSort] = useState("recommended");
+  const [searchParams] = useSearchParams();
   const [filters, setFilters] = useState({
     from: "",
     to: "",
@@ -273,24 +274,25 @@ export default function Flights() {
       .catch(() => {});
   }, []);
 
-  const search = async (page = 1) => {
+  const search = async (page = 1, overrides = null) => {
     setLoading(true);
     try {
+      const f = overrides || filters;
       const params = { page, limit: 10 };
-      if (filters.from) params.from = filters.from;
-      if (filters.to) params.to = filters.to;
-      if (filters.date) params.date = filters.date;
-      if (filters.maxPrice) params.maxPrice = filters.maxPrice;
-      if (filters.passengers) params.passengers = filters.passengers;
+      if (f.from) params.from = f.from;
+      if (f.to) params.to = f.to;
+      if (f.date) params.date = f.date;
+      if (f.maxPrice) params.maxPrice = f.maxPrice;
+      if (f.passengers) params.passengers = f.passengers;
 
       const res = await api.get("/flights", { params });
       setFlights(res.data.flights);
       setPagination(res.data.pagination);
       setLastQuery({
-        from: filters.from,
-        to: filters.to,
-        date: filters.date,
-        passengers: filters.passengers,
+        from: f.from,
+        to: f.to,
+        date: f.date,
+        passengers: f.passengers,
       });
     } catch (err) {
       console.error(err);
@@ -299,8 +301,25 @@ export default function Flights() {
     }
   };
 
+  // On mount: hydrate from URL params if present, then search
   useEffect(() => {
-    search();
+    const fromUrl = searchParams.get("from") || "";
+    const toUrl = searchParams.get("to") || "";
+    const dateUrl = searchParams.get("depart") || searchParams.get("date") || "";
+    const passUrl = searchParams.get("travelers") || searchParams.get("passengers") || "";
+    if (fromUrl || toUrl || dateUrl || passUrl) {
+      const initial = {
+        from: fromUrl,
+        to: toUrl,
+        date: dateUrl,
+        maxPrice: "",
+        passengers: passUrl || "1",
+      };
+      setFilters(initial);
+      search(1, initial);
+    } else {
+      search();
+    }
     // eslint-disable-next-line
   }, []);
 

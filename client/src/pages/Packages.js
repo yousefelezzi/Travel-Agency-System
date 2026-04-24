@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import api from "../services/api";
 
 /* ── hero images ── */
@@ -106,13 +106,16 @@ export default function Packages() {
   const [maxPrice, setMaxPrice] = useState("");
   const [pagination, setPagination] = useState({});
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
-  const fetchPackages = async (page = 1) => {
+  const fetchPackages = async (page = 1, overrides = null) => {
     setLoading(true);
     try {
       const params = { page, limit: 12 };
-      if (searchText) params.search = searchText;
-      if (maxPrice) params.maxPrice = maxPrice;
+      const useSearch = overrides?.search ?? searchText;
+      const useMax = overrides?.maxPrice ?? maxPrice;
+      if (useSearch) params.search = useSearch;
+      if (useMax) params.maxPrice = useMax;
       const res = await api.get("/packages", { params });
       setPackages(res.data.packages || []);
       setPagination(res.data.pagination || {});
@@ -123,7 +126,19 @@ export default function Packages() {
     }
   };
 
-  useEffect(() => { fetchPackages(); /* eslint-disable-next-line */ }, []);
+  useEffect(() => {
+    const destUrl =
+      searchParams.get("destination") ||
+      searchParams.get("search") ||
+      "";
+    if (destUrl) {
+      setSearchText(destUrl);
+      fetchPackages(1, { search: destUrl });
+    } else {
+      fetchPackages();
+    }
+    /* eslint-disable-next-line */
+  }, []);
 
   const handleSearch = (e) => {
     e.preventDefault();
