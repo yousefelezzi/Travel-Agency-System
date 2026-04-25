@@ -1,4 +1,4 @@
-# ✈️ Travel Agency System (TAS)
+# ✈️ Travel Agency System (ATLAS)
 
 > A full-stack web application that centralizes booking, customer management, payment processing, and provider communication into a single digital platform for modern travel agencies.
 
@@ -20,9 +20,9 @@
 
 ## About the Project
 
-The **Travel Agency System (TAS)** is developed as part of **CSC 490 – Software Engineering** at the Lebanese American University, under the supervision of **Dr. Ramzi Haraty**.
+The **Travel Agency System (ATLAS)** is developed as part of **CSC 490 – Software Engineering** at the Lebanese American University, under the supervision of **Dr. Ramzi Haraty**.
 
-TAS is designed to close the gap between what modern travelers expect and what legacy systems can deliver. It eliminates booking conflicts, delayed confirmations, and poor inventory visibility by offering an integrated digital ecosystem with purpose-built interfaces for customers, travel agents, administrators, and external service providers.
+ATLAS is designed to close the gap between what modern travelers expect and what legacy systems can deliver. It eliminates booking conflicts, delayed confirmations, and poor inventory visibility by offering an integrated digital ecosystem with purpose-built interfaces for customers, travel agents, administrators, and external service providers.
 
 ---
 
@@ -61,7 +61,7 @@ TAS is designed to close the gap between what modern travelers expect and what l
 
 ## 🏗️ System Architecture
 
-TAS is built on four integrated architectural models:
+ATLAS is built on four integrated architectural models:
 
 - **Repository Architecture** – Centralized PostgreSQL/SQL Server database with ORM integration and AES-256 encryption for sensitive fields.
 - **Layered Architecture** – Six-layer design separating Roles & Access Control, Interface, Business Logic, Service, Repository, and Security concerns.
@@ -84,7 +84,7 @@ TAS is built on four integrated architectural models:
 - 👤 Full customer profile and reservation management
 - 📦 Tour package creation, editing, and publishing
 - 🎫 Booking on behalf of customers
-- 🎫 Support ticket resolution from within the TAS dashboard
+- 🎫 Support ticket resolution from within the ATLAS dashboard
 
 ### For Administrators
 - 🔐 Full user and role management (RBAC)

@@ -61,12 +61,12 @@ export default function Register() {
         <div className="auth-visual-content">
           <div className="auth-visual-brand">
             <span className="auth-visual-mark" />
-            TAS
+            ATLAS
           </div>
           <div className="auth-visual-copy">
             <span className="auth-visual-eyebrow">
               <span className="auth-visual-eyebrow-dot" />
-              Join TAS today
+              Join ATLAS today
             </span>
             <h2>
               Plan smarter.
@@ -98,7 +98,7 @@ export default function Register() {
           <div className="auth-form-header">
             <span className="auth-form-eyebrow">— Create account</span>
             <h2>
-              Create your <em>TAS account.</em>
+              Create your <em>ATLAS account.</em>
             </h2>
             <p>Start planning smarter trips in minutes.</p>
           </div>

@@ -47,7 +47,7 @@ export default function Login() {
         <div className="auth-visual-content">
           <div className="auth-visual-brand">
             <span className="auth-visual-mark" />
-            TAS
+            ATLAS
           </div>
           <div className="auth-visual-copy">
             <span className="auth-visual-eyebrow">
@@ -86,7 +86,7 @@ export default function Login() {
             <h2>
               Welcome <em>back.</em>
             </h2>
-            <p>Sign in to continue your journey with TAS.</p>
+            <p>Sign in to continue your journey with ATLAS.</p>
           </div>
 
           {error && <div className="alert alert-error">{error}</div>}

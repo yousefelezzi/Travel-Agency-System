@@ -1,5 +1,5 @@
 /* ============================================
-   TAS - Travel Agency System Styles
+   ATLAS - Travel Agency System Styles
    ============================================ */
 
 :root {
@@ -175,6 +175,24 @@ h1, h2, h3, h4, h5, h6 {
 .nav-links a:hover {
   color: var(--primary);
   background: var(--primary-light);
+}
+
+.nav-links a.active {
+  position: relative;
+  color: var(--navy, #0A0E17);
+  background: var(--primary-light);
+  font-weight: 700;
+}
+.nav-links a.active::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -6px;
+  transform: translateX(-50%);
+  width: 22px;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--accent, #F59E0B);
 }
 
 .nav-links .btn {
@@ -1270,6 +1288,13 @@ h1, h2, h3, h4, h5, h6 {
   margin: 1.65rem 0 1.5rem;
 }
 .hero-title-line { display: block; }
+.hero-title-gradient {
+  background: linear-gradient(135deg, #FCE7C6 0%, #F59E0B 45%, #FDE4B3 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
 .hero-title-rotate {
   display: flex;
   align-items: baseline;
@@ -1341,8 +1366,101 @@ h1, h2, h3, h4, h5, h6 {
 
 .hero-actions {
   display: flex;
-  gap: 0.65rem;
+  align-items: center;
+  gap: 0.85rem;
   flex-wrap: wrap;
+}
+
+.btn-cta-hero-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65rem;
+  height: 62px;
+  padding: 0 2.1rem;
+  border-radius: 999px;
+  border: none;
+  background: white;
+  color: #0A0E17;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-weight: 800;
+  font-size: 1.05rem;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.6),
+    0 18px 44px -12px rgba(255, 255, 255, 0.55),
+    0 0 60px -10px rgba(245, 158, 11, 0.35);
+  transition: transform 0.28s cubic-bezier(.4, 0, .2, 1),
+    box-shadow 0.28s cubic-bezier(.4, 0, .2, 1);
+}
+.btn-cta-hero-primary svg {
+  transition: transform 0.28s cubic-bezier(.4, 0, .2, 1);
+}
+.btn-cta-hero-primary:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.85),
+    0 26px 60px -14px rgba(255, 255, 255, 0.7),
+    0 0 90px -10px rgba(245, 158, 11, 0.55);
+}
+.btn-cta-hero-primary:hover svg { transform: translateX(4px); }
+
+.btn-cta-hero-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 54px;
+  padding: 0 1.6rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-weight: 600;
+  font-size: 0.95rem;
+  letter-spacing: -0.005em;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.25s ease, border-color 0.25s ease;
+}
+.btn-cta-hero-secondary:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.45);
+}
+
+.search-trip-class {
+  display: inline-flex;
+  gap: 0.35rem;
+  padding: 0.3rem;
+  margin-bottom: 0.85rem;
+  background: var(--h-cream);
+  border: 1px solid var(--h-cream-2);
+  border-radius: 999px;
+  width: fit-content;
+}
+.trip-class-opt {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 1rem;
+  border-radius: 999px;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--slate-light);
+  cursor: pointer;
+  transition: all 0.2s;
+  user-select: none;
+}
+.trip-class-opt input { display: none; }
+.trip-class-opt:hover { color: var(--navy); }
+.trip-class-opt.is-active {
+  background: var(--navy);
+  color: white;
 }
 
 /* CTA buttons */
@@ -1640,7 +1758,8 @@ h1, h2, h3, h4, h5, h6 {
   text-transform: uppercase;
   margin-bottom: 3px;
 }
-.search-field input {
+.search-field input,
+.search-field select {
   border: none;
   background: transparent;
   outline: none;
@@ -1651,6 +1770,9 @@ h1, h2, h3, h4, h5, h6 {
   padding: 0;
   width: 100%;
   min-width: 0;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
 }
 .search-field input::placeholder {
   color: var(--slate-light);
@@ -2015,7 +2137,7 @@ h1, h2, h3, h4, h5, h6 {
   flex-shrink: 0;
 }
 
-/* ---- WHY TAS (bento) ---- */
+/* ---- WHY ATLAS (bento) ---- */
 .why-wrap {
   position: relative;
   margin-top: 6rem;
