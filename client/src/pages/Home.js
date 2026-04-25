@@ -8,8 +8,8 @@ const heroTrips = [
     price: 1249,
     tag: "All-inclusive",
     image:
-      "https://images.unsplash.com/photo-1537996194471-e657df975ab4?w=1200&q=80&auto=format&fit=crop",
-    fallback: "https://picsum.photos/seed/bali-tropical/1200/800",
+      "https://images.unsplash.com/photo-1537996194471-e657df975ab4?w=1600&q=80&auto=format&fit=crop",
+    fallback: "https://picsum.photos/seed/bali-tropical/1600/1000",
   },
   {
     city: "Maldives",
@@ -18,8 +18,8 @@ const heroTrips = [
     price: 2150,
     tag: "Overwater villa",
     image:
-      "https://images.unsplash.com/photo-1514282401047-d79a71a590e8?w=1200&q=80&auto=format&fit=crop",
-    fallback: "https://picsum.photos/seed/maldives-lagoon/1200/800",
+      "https://images.unsplash.com/photo-1514282401047-d79a71a590e8?w=1600&q=80&auto=format&fit=crop",
+    fallback: "https://picsum.photos/seed/maldives-lagoon/1600/1000",
   },
   {
     city: "Paris",
@@ -28,8 +28,8 @@ const heroTrips = [
     price: 879,
     tag: "City break",
     image:
-      "https://images.unsplash.com/photo-1502602898657-3e91760cbb34?w=1200&q=80&auto=format&fit=crop",
-    fallback: "https://picsum.photos/seed/paris-eiffel/1200/800",
+      "https://images.unsplash.com/photo-1502602898657-3e91760cbb34?w=1600&q=80&auto=format&fit=crop",
+    fallback: "https://picsum.photos/seed/paris-eiffel/1600/1000",
   },
   {
     city: "Dubai",
@@ -38,8 +38,8 @@ const heroTrips = [
     price: 1390,
     tag: "Luxury escape",
     image:
-      "https://images.unsplash.com/photo-1512453979798-5ea266f8880c?w=1200&q=80&auto=format&fit=crop",
-    fallback: "https://picsum.photos/seed/dubai-skyline/1200/800",
+      "https://images.unsplash.com/photo-1512453979798-5ea266f8880c?w=1600&q=80&auto=format&fit=crop",
+    fallback: "https://picsum.photos/seed/dubai-skyline/1600/1000",
   },
 ];
 
@@ -50,8 +50,8 @@ const destinations = [
     nights: 5,
     price: 489,
     image:
-      "https://images.unsplash.com/photo-1570077188672-e3a9c5e60ef4?w=900&q=80&auto=format&fit=crop",
-    fallback: "https://picsum.photos/seed/santorini-white/900/1200",
+      "https://images.unsplash.com/photo-1570077188672-e3a9c5e60ef4?w=1200&q=80&auto=format&fit=crop",
+    fallback: "https://picsum.photos/seed/santorini-white/1200/1400",
   },
   {
     city: "Kyoto",
@@ -59,8 +59,8 @@ const destinations = [
     nights: 7,
     price: 712,
     image:
-      "https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?w=900&q=80&auto=format&fit=crop",
-    fallback: "https://picsum.photos/seed/kyoto-torii/900/1200",
+      "https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?w=1200&q=80&auto=format&fit=crop",
+    fallback: "https://picsum.photos/seed/kyoto-torii/1200/800",
   },
   {
     city: "Marrakech",
@@ -68,8 +68,8 @@ const destinations = [
     nights: 4,
     price: 394,
     image:
-      "https://images.unsplash.com/photo-1597212618440-806262de4f6b?w=900&q=80&auto=format&fit=crop",
-    fallback: "https://picsum.photos/seed/marrakech-souk/900/1200",
+      "https://images.unsplash.com/photo-1597212618440-806262de4f6b?w=1200&q=80&auto=format&fit=crop",
+    fallback: "https://picsum.photos/seed/marrakech-souk/1200/900",
   },
   {
     city: "Queenstown",
@@ -77,8 +77,8 @@ const destinations = [
     nights: 6,
     price: 1120,
     image:
-      "https://images.unsplash.com/photo-1589871973318-9ca1258faa5d?w=900&q=80&auto=format&fit=crop",
-    fallback: "https://picsum.photos/seed/queenstown-alps/900/1200",
+      "https://images.unsplash.com/photo-1589871973318-9ca1258faa5d?w=1200&q=80&auto=format&fit=crop",
+    fallback: "https://picsum.photos/seed/queenstown-alps/1200/900",
   },
 ];
 
@@ -113,6 +113,11 @@ const tabs = [
   },
 ];
 
+const longestCity = heroTrips.reduce(
+  (acc, t) => (t.city.length > acc.length ? t.city : acc),
+  ""
+);
+
 const handleImgError = (fallback) => (e) => {
   if (e.target.src !== fallback) {
     e.target.src = fallback;
@@ -126,7 +131,7 @@ export default function Home() {
   useEffect(() => {
     const id = setInterval(() => {
       setSlideIndex((i) => (i + 1) % heroTrips.length);
-    }, 4500);
+    }, 5000);
     return () => clearInterval(id);
   }, []);
 
@@ -134,29 +139,60 @@ export default function Home() {
 
   return (
     <div className="home">
-      {/* HERO */}
+      {/* ========== HERO — Cinematic ========== */}
       <section className="hero">
-        <div className="hero-bg" aria-hidden="true">
-          <div className="hero-blob hero-blob-1" />
-          <div className="hero-blob hero-blob-2" />
-          <div className="hero-grid" />
+        <div className="hero-stage" aria-hidden="true">
+          {heroTrips.map((t, i) => (
+            <img
+              key={t.city}
+              className={`hero-stage-img ${i === slideIndex ? "is-active" : ""}`}
+              src={t.image}
+              alt=""
+              onError={handleImgError(t.fallback)}
+              loading={i === 0 ? "eager" : "lazy"}
+            />
+          ))}
+          <div className="hero-stage-tint" />
+          <div className="hero-stage-aurora" />
+          <div className="hero-stage-grain" />
         </div>
 
         <div className="hero-inner">
           <div className="hero-copy">
             <span className="eyebrow">
               <span className="eyebrow-dot" />
-              Trusted by 2M+ travelers worldwide
+              Trusted by 2M+ travelers in 120+ countries
             </span>
+
             <h1 className="hero-title">
-              Your next journey,
-              <br />
-              <span className="hero-title-accent">beautifully planned.</span>
+              <span className="hero-title-line">Your next journey</span>
+              <span className="hero-title-line hero-title-rotate">
+                <span className="hero-title-to">to</span>
+                <span className="rotator">
+                  <span className="rotator-ghost" aria-hidden="true">
+                    {longestCity}
+                  </span>
+                  {heroTrips.map((t, i) => (
+                    <span
+                      key={t.city}
+                      className={`rotator-slot ${i === slideIndex ? "is-active" : ""}`}
+                      aria-hidden={i !== slideIndex}
+                    >
+                      {t.city}
+                    </span>
+                  ))}
+                </span>
+              </span>
+              <span className="hero-title-line hero-title-serif">
+                beautifully planned.
+              </span>
             </h1>
+
             <p className="hero-sub">
               Discover flights, hand-picked hotels, and curated packages in one
-              seamless place. Real-time pricing, instant booking, zero noise.
+              seamless place. Real-time pricing. Instant booking. Zero noise.
             </p>
+
             <div className="hero-actions">
               <button type="button" className="btn-cta btn-cta-primary">
                 Start exploring
@@ -168,102 +204,69 @@ export default function Home() {
                 How it works
               </button>
             </div>
-            <div className="hero-trust">
-              <div className="trust-item">
-                <strong>120+</strong>
-                <span>countries</span>
-              </div>
-              <span className="trust-divider" />
-              <div className="trust-item">
-                <strong>850+</strong>
-                <span>airlines</span>
-              </div>
-              <span className="trust-divider" />
-              <div className="trust-item">
-                <strong>4.9 &#9733;</strong>
-                <span>user rating</span>
-              </div>
-            </div>
           </div>
 
-          <div className="hero-visual">
-            <div className="hero-card">
-              <div className="hero-slides">
-                {heroTrips.map((trip, i) => (
-                  <img
-                    key={trip.city}
-                    className={`hero-slide ${i === slideIndex ? "active" : ""}`}
-                    src={trip.image}
-                    alt={`${trip.city}, ${trip.country}`}
-                    onError={handleImgError(trip.fallback)}
-                    loading={i === 0 ? "eager" : "lazy"}
-                  />
-                ))}
-                <div className="hero-slide-overlay" />
-                <div className="hero-slide-tag">
-                  <span className="tag-dot" />
-                  {currentTrip.tag}
-                </div>
+          <aside className="hero-chip">
+            <div className="hero-chip-head">
+              <span className="hero-chip-index">
+                {String(slideIndex + 1).padStart(2, "0")}
+                <em>/</em>
+                {String(heroTrips.length).padStart(2, "0")}
+              </span>
+              <span className="hero-chip-tag">
+                <span className="tag-dot" />
+                {currentTrip.tag}
+              </span>
+            </div>
+            <div className="hero-chip-city">{currentTrip.city}</div>
+            <div className="hero-chip-country">{currentTrip.country}</div>
+            <div className="hero-chip-foot">
+              <div className="hero-chip-price">
+                <span>{currentTrip.nights} nights from</span>
+                <strong>${currentTrip.price.toLocaleString()}</strong>
               </div>
-
-              <div className="hero-card-meta">
-                <div>
-                  <div className="hero-card-city">
-                    {currentTrip.city}, {currentTrip.country}
-                  </div>
-                  <div className="hero-card-sub">
-                    {currentTrip.nights} nights &middot; {currentTrip.tag}
-                  </div>
-                </div>
-                <div className="hero-card-price">
-                  <span>from</span>
-                  <strong>${currentTrip.price.toLocaleString()}</strong>
-                </div>
-              </div>
-
-              <div className="hero-slide-dots">
+              <div className="hero-chip-dots">
                 {heroTrips.map((_, i) => (
                   <button
                     key={i}
                     type="button"
-                    className={`slide-dot ${i === slideIndex ? "active" : ""}`}
+                    className={`chip-dot ${i === slideIndex ? "is-active" : ""}`}
                     onClick={() => setSlideIndex(i)}
                     aria-label={`Show trip ${i + 1}`}
                   />
                 ))}
               </div>
             </div>
+          </aside>
+        </div>
 
-            <div className="hero-float hero-float-1">
-              <div className="float-icon float-icon-amber">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z" />
-                </svg>
-              </div>
-              <div className="float-body">
-                <div className="float-title">Direct flight</div>
-                <div className="float-sub">12h 40m &middot; 1 stop</div>
-              </div>
-            </div>
-
-            <div className="hero-float hero-float-2">
-              <div className="float-icon float-icon-teal">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-                </svg>
-              </div>
-              <div className="float-body">
-                <div className="float-title">4.92 / 5.0</div>
-                <div className="float-sub">12,840 reviews</div>
-              </div>
-            </div>
+        <div className="hero-trust">
+          <div className="trust-item">
+            <strong>120+</strong>
+            <span>countries</span>
+          </div>
+          <span className="trust-divider" />
+          <div className="trust-item">
+            <strong>850+</strong>
+            <span>airlines</span>
+          </div>
+          <span className="trust-divider" />
+          <div className="trust-item">
+            <strong>4.92 &#9733;</strong>
+            <span>12,840 reviews</span>
           </div>
         </div>
       </section>
 
-      {/* SEARCH WIDGET */}
+      {/* ========== SEARCH WIDGET ========== */}
       <section className="search-wrap">
         <div className="search-widget">
+          <div className="search-prompt">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+            </svg>
+            Where do you dream of going?
+          </div>
           <div className="search-tabs">
             {tabs.map((t) => (
               <button
@@ -308,23 +311,53 @@ export default function Home() {
         </div>
       </section>
 
-      {/* DESTINATIONS */}
-      <section className="section">
+      {/* ========== MARQUEE ========== */}
+      <section className="marquee" aria-hidden="true">
+        <div className="marquee-track">
+          {[0, 1].map((dup) => (
+            <div key={dup} className="marquee-group">
+              <span>Flights</span>
+              <span className="marquee-dot">&#10038;</span>
+              <span>1.2M hotels</span>
+              <span className="marquee-dot">&#10038;</span>
+              <span>120+ countries</span>
+              <span className="marquee-dot">&#10038;</span>
+              <span>AI itineraries</span>
+              <span className="marquee-dot">&#10038;</span>
+              <span>Instant confirmation</span>
+              <span className="marquee-dot">&#10038;</span>
+              <span>Refundable plans</span>
+              <span className="marquee-dot">&#10038;</span>
+              <span>24/7 concierge</span>
+              <span className="marquee-dot">&#10038;</span>
+              <span>Curated packages</span>
+              <span className="marquee-dot">&#10038;</span>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ========== DESTINATIONS BENTO ========== */}
+      <section className="section dest-section">
         <div className="section-head">
           <div>
-            <span className="section-eyebrow">Featured destinations</span>
-            <h2 className="section-title">Inspired picks for your next trip</h2>
+            <span className="section-eyebrow">— Featured destinations</span>
+            <h2 className="section-title">
+              Hand-picked escapes,
+              <br />
+              <em>curated by humans.</em>
+            </h2>
           </div>
           <button type="button" className="section-link">
-            View all
+            View all 120+
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M5 12h14M12 5l7 7-7 7" />
             </svg>
           </button>
         </div>
-        <div className="dest-grid">
-          {destinations.map((d) => (
-            <div key={d.city} className="dest-card">
+        <div className="dest-bento">
+          {destinations.map((d, i) => (
+            <article key={d.city} className={`dest-card dest-card-${i + 1}`}>
               <img
                 className="dest-img"
                 src={d.image}
@@ -332,36 +365,43 @@ export default function Home() {
                 onError={handleImgError(d.fallback)}
                 loading="lazy"
               />
-              <div className="dest-overlay" aria-hidden="true" />
-              <div className="dest-top">
-                <span className="dest-heart">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78z" />
-                  </svg>
-                </span>
-              </div>
-              <div className="dest-meta">
-                <div className="dest-name">{d.city}</div>
-                <div className="dest-country">{d.country} &middot; {d.nights} nights</div>
-              </div>
-              <div className="dest-footer">
-                <div className="dest-price">
-                  <span>from</span>
-                  <strong>${d.price}</strong>
+              <div className="dest-veil" aria-hidden="true" />
+              <span className="dest-num">
+                {String(i + 1).padStart(2, "0")}
+              </span>
+              <button
+                type="button"
+                className="dest-heart"
+                aria-label={`Save ${d.city}`}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78z" />
+                </svg>
+              </button>
+              <div className="dest-body">
+                <div className="dest-head">
+                  <h3>{d.city}</h3>
+                  <span className="dest-country">{d.country}</span>
                 </div>
-                <span className="dest-cta">
-                  Explore
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M5 12h14M12 5l7 7-7 7" />
-                  </svg>
-                </span>
+                <div className="dest-foot">
+                  <div className="dest-price">
+                    <span>{d.nights}N from</span>
+                    <strong>${d.price}</strong>
+                  </div>
+                  <span className="dest-cta">
+                    Explore
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M5 12h14M12 5l7 7-7 7" />
+                    </svg>
+                  </span>
+                </div>
               </div>
-            </div>
+            </article>
           ))}
         </div>
       </section>
 
-      {/* MID CTA — earlier conversion, low pressure */}
+      {/* ========== MID CTA — dark ribbon ========== */}
       <section className="mid-cta-wrap">
         <div className="mid-cta">
           <div className="mid-cta-glow" aria-hidden="true" />
@@ -378,7 +418,7 @@ export default function Home() {
               </div>
             </div>
           </div>
-          <button type="button" className="btn-cta btn-cta-primary mid-cta-btn">
+          <button type="button" className="btn-cta btn-cta-accent mid-cta-btn">
             Start planning your trip
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M5 12h14M12 5l7 7-7 7" />
@@ -387,7 +427,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* WHY TAS — bento: 1 featured + 2 side cards */}
+      {/* ========== WHY TAS — Bento ========== */}
       <section className="why-wrap">
         <div className="why-bg" aria-hidden="true">
           <div className="why-blob why-blob-1" />
@@ -395,17 +435,21 @@ export default function Home() {
         </div>
         <div className="why-inner">
           <div className="section-head section-head-center">
-            <span className="section-eyebrow">Why TAS</span>
-            <h2 className="section-title">Built for travelers. Designed to trust.</h2>
+            <span className="section-eyebrow">— Why TAS</span>
+            <h2 className="section-title">
+              Built for travelers.
+              <br />
+              <em>Designed to trust.</em>
+            </h2>
             <p className="section-sub">
               Three things we obsess over so you can focus on the trip, not the logistics.
             </p>
           </div>
 
           <div className="why-grid">
-            {/* Featured dark card — spans 2 rows */}
             <article className="why-card why-featured">
               <div className="why-featured-bg" aria-hidden="true" />
+              <div className="why-featured-grain" aria-hidden="true" />
               <div className="why-featured-top">
                 <div className="why-featured-icon">
                   <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -420,7 +464,11 @@ export default function Home() {
                 </span>
               </div>
               <div className="why-featured-body">
-                <h3>Real-time everywhere, no bait-and-switch.</h3>
+                <h3>
+                  Real-time everywhere,
+                  <br />
+                  <em>no bait-and-switch.</em>
+                </h3>
                 <p>
                   Live availability across 850+ airlines and over a million hotels.
                   What you see is exactly what you book &mdash; prices refresh under
@@ -443,7 +491,6 @@ export default function Home() {
               </div>
             </article>
 
-            {/* Secure card */}
             <article className="why-card why-side">
               <div className="why-icon-lg">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -458,7 +505,6 @@ export default function Home() {
               </p>
             </article>
 
-            {/* Human support card */}
             <article className="why-card why-side">
               <div className="why-icon-lg">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -476,13 +522,18 @@ export default function Home() {
         </div>
       </section>
 
-      {/* FINAL CTA — reinforcement, not hard sell */}
+      {/* ========== FINAL CTA ========== */}
       <section className="cta-wrap">
         <div className="cta-banner">
           <div className="cta-bg" aria-hidden="true" />
+          <div className="cta-grain" aria-hidden="true" />
           <div className="cta-content">
-            <span className="section-eyebrow eyebrow-light">Ready to start?</span>
-            <h2>Your next adventure, one tap away.</h2>
+            <span className="section-eyebrow eyebrow-light">— Ready to start?</span>
+            <h2>
+              Your next adventure,
+              <br />
+              <em>one tap away.</em>
+            </h2>
             <p>
               Join 2M+ travelers planning smarter with TAS. Book with confidence,
               travel without the stress &mdash; we'll handle the rest.
@@ -495,7 +546,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* FOOTER */}
+      {/* ========== FOOTER ========== */}
       <footer className="home-footer">
         <div className="footer-inner">
           <div className="footer-brand">
