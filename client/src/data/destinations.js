@@ -63,7 +63,7 @@ export const DESTINATIONS = [
     id: "queenstown",
     name: "Queenstown",
     country: "New Zealand",
-    region: "anywhere",
+    region: "oceania",
     image:
       "https://images.unsplash.com/photo-1589871973318-9ca1258faa5d?w=1200&q=80&auto=format&fit=crop",
     fallback: "https://picsum.photos/seed/queenstown-alps/1200/800",
@@ -423,7 +423,7 @@ export const DESTINATIONS = [
     id: "capetown",
     name: "Cape Town",
     country: "South Africa",
-    region: "anywhere",
+    region: "africa",
     image:
       "https://images.unsplash.com/photo-1580060839134-75a5edca2e99?w=1200&q=80&auto=format&fit=crop",
     fallback: "https://picsum.photos/seed/capetown-table/1200/800",
@@ -443,7 +443,7 @@ export const DESTINATIONS = [
     id: "cancun",
     name: "Cancún",
     country: "Mexico",
-    region: "anywhere",
+    region: "americas",
     image:
       "https://images.unsplash.com/photo-1552074284-5e88ef1aef18?w=1200&q=80&auto=format&fit=crop",
     fallback: "https://picsum.photos/seed/cancun-beach/1200/800",
@@ -463,7 +463,7 @@ export const DESTINATIONS = [
     id: "costa-rica",
     name: "Costa Rica",
     country: "Costa Rica",
-    region: "anywhere",
+    region: "americas",
     image:
       "https://images.unsplash.com/photo-1518259102261-b40117eabbc9?w=1200&q=80&auto=format&fit=crop",
     fallback: "https://picsum.photos/seed/costarica-arenal/1200/800",
@@ -483,7 +483,7 @@ export const DESTINATIONS = [
     id: "banff",
     name: "Banff",
     country: "Canada",
-    region: "anywhere",
+    region: "americas",
     image:
       "https://images.unsplash.com/photo-1561134643-668f9057cce4?w=1200&q=80&auto=format&fit=crop",
     fallback: "https://picsum.photos/seed/banff-lake/1200/800",

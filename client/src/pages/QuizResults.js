@@ -2,14 +2,31 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { loadQuiz, savePlannerDraft } from "../utils/preferences";
 import { recommend, quizToPlannerForm } from "../utils/recommend";
+import api from "../services/api";
 
 const handleImgError = (fallback) => (e) => {
   if (e.target.src !== fallback) e.target.src = fallback;
 };
 
+// When the user has picked a budget bucket, the "From $X" badge should
+// reflect the floor of THEIR budget, not the destination's absolute floor.
+// Otherwise a $1,000-3,000 budget can still show "From $460" for cities
+// that also support cheaper trips — which reads as a contradiction.
+const BUDGET_FLOOR = {
+  "under-500": 0,
+  "500-1000": 500,
+  "1000-3000": 1000,
+  "3000+": 3000,
+};
+const displayedPriceFrom = (dest, prefs) => {
+  const floor = BUDGET_FLOOR[prefs?.budget] ?? 0;
+  return Math.max(dest.priceFrom, floor);
+};
+
 export default function QuizResults() {
   const navigate = useNavigate();
   const [prefs, setPrefs] = useState(null);
+  const [packageBlobs, setPackageBlobs] = useState(null);
 
   useEffect(() => {
     const q = loadQuiz();
@@ -20,7 +37,40 @@ export default function QuizResults() {
     setPrefs(q);
   }, [navigate]);
 
+  // Fetch packages once so we can hide the "View Packages" button for
+  // destinations that have zero matching inventory. Without this, the quiz
+  // would link users to an empty results page (e.g. Reykjavík → no match).
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .get("/packages", { params: { limit: 200 } })
+      .then((res) => {
+        if (cancelled) return;
+        const blobs = (res.data?.packages || []).map((p) =>
+          [p.packageName || "", p.description || "", ...(p.services || [])]
+            .join(" ")
+            .toLowerCase()
+        );
+        setPackageBlobs(blobs);
+      })
+      .catch(() => {
+        if (!cancelled) setPackageBlobs([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const matches = useMemo(() => (prefs ? recommend(prefs, 5) : []), [prefs]);
+
+  const hasPackagesFor = (dest) => {
+    if (!packageBlobs || packageBlobs.length === 0) return false;
+    const name = (dest.name || "").toLowerCase();
+    const country = (dest.country || "").toLowerCase();
+    return packageBlobs.some(
+      (b) => (name && b.includes(name)) || (country && b.includes(country))
+    );
+  };
 
   const sendToPlanner = (destinationName = "") => {
     if (!prefs) return;
@@ -106,7 +156,7 @@ export default function QuizResults() {
                     </div>
                     <div className="result-card-price">
                       <span>{d.nightsTypical}N from</span>
-                      <strong>${d.priceFrom.toLocaleString()}</strong>
+                      <strong>${displayedPriceFrom(d, prefs).toLocaleString()}</strong>
                     </div>
                   </div>
                   <p className="result-card-blurb">{d.blurb}</p>
@@ -127,13 +177,21 @@ export default function QuizResults() {
                     >
                       Plan {d.name} with AI
                     </button>
-                    <button
-                      type="button"
-                      className="btn-cta btn-cta-result-ghost"
-                      onClick={() => navigate(`/packages?destination=${encodeURIComponent(d.name)}`)}
-                    >
-                      View Packages
-                    </button>
+                    {hasPackagesFor(d) && (
+                      <button
+                        type="button"
+                        className="btn-cta btn-cta-result-ghost"
+                        onClick={() =>
+                          navigate(
+                            `/packages?destination=${encodeURIComponent(
+                              `${d.name} ${d.country}`.trim()
+                            )}`
+                          )
+                        }
+                      >
+                        View Packages
+                      </button>
+                    )}
                   </div>
                 </div>
               </article>

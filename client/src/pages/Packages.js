@@ -111,7 +111,7 @@ export default function Packages() {
   const fetchPackages = async (page = 1, overrides = null) => {
     setLoading(true);
     try {
-      const params = { page, limit: 12 };
+      const params = { page, limit: 24 };
       const useSearch = overrides?.search ?? searchText;
       const useMax = overrides?.maxPrice ?? maxPrice;
       if (useSearch) params.search = useSearch;
@@ -169,7 +169,11 @@ export default function Packages() {
 
   const resultsHeadline = () => {
     const count = filteredSorted.length;
+    const total = pagination?.total || count;
     if (!count) return "No packages available";
+    if (total > count) {
+      return `Showing ${count} of ${total.toLocaleString()} package${total === 1 ? "" : "s"} available`;
+    }
     return `${count} package${count === 1 ? "" : "s"} available`;
   };
 

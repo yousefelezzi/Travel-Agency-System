@@ -40,6 +40,9 @@ const REGION_LABEL = {
   europe: "Europe",
   asia: "Asia",
   "middle-east": "the Middle East",
+  africa: "Africa",
+  americas: "the Americas",
+  oceania: "Oceania",
   anywhere: "anywhere",
 };
 
@@ -65,11 +68,14 @@ const passesHardFilters = (dest, prefs) => {
   ) {
     return false;
   }
+  // Hard region filter: if the user picked a specific region, only show
+  // destinations actually in that region. We used to treat dest.region ===
+  // "anywhere" as a wildcard escape — that bug let Cape Town show up under
+  // a "Europe" preference. Every destination now has a real region.
   if (
     prefs.region &&
     prefs.region !== "anywhere" &&
-    dest.region !== prefs.region &&
-    dest.region !== "anywhere"
+    dest.region !== prefs.region
   ) {
     return false;
   }
