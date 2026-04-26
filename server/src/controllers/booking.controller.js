@@ -1,10 +1,45 @@
 const prisma = require("../config/db");
+const { quoteCancellation } = require("../services/cancellation.service");
+const { streamInvoicePdf } = require("../services/invoice.service");
+const {
+  sendBookingConfirmation,
+  sendBookingModification,
+  sendBookingCancellation,
+} = require("../services/notification.service");
+
+// Helper: load a booking with everything we need (items + customer email)
+async function loadFullBooking(id) {
+  return prisma.booking.findUnique({
+    where: { id },
+    include: {
+      items: { include: { flight: true, hotel: true, package: true } },
+      passengers: true,
+      payments: true,
+      invoice: true,
+      customer: { include: { user: { select: { email: true } } } },
+    },
+  });
+}
+
+// Helper: enforce ownership for customer requests
+async function ensureOwnership(req, booking) {
+  if (req.user.role !== "CUSTOMER") return null;
+  const customer = await prisma.customer.findUnique({
+    where: { userId: req.user.id },
+  });
+  if (!customer || booking.customerId !== customer.id) {
+    return { code: 403, message: "Access denied." };
+  }
+  return null;
+}
 
 // POST /api/bookings
-// Body: { items: [{ type, id, seatClass?, checkIn?, checkOut?, quantity? }], passengers: [...] }
+// Body: { items: [...], passengers: [...], onBehalfOfCustomerId? }
+// Customers book for themselves; agents/admins may pass
+// `onBehalfOfCustomerId` to create a booking under another customer.
 const createBooking = async (req, res, next) => {
   try {
-    const { items, passengers } = req.body;
+    const { items, passengers, onBehalfOfCustomerId } = req.body;
 
     if (!items || items.length === 0) {
       return res
@@ -18,10 +53,27 @@ const createBooking = async (req, res, next) => {
         .json({ error: { message: "At least one passenger is required." } });
     }
 
-    // Get customer profile
-    const customer = await prisma.customer.findUnique({
-      where: { userId: req.user.id },
-    });
+    // Resolve target customer profile.
+    // - Staff (TRAVEL_AGENT/ADMIN) booking for someone else: use the explicit ID
+    // - Otherwise: the authenticated user's own customer profile
+    let customer;
+    if (
+      onBehalfOfCustomerId &&
+      (req.user.role === "TRAVEL_AGENT" || req.user.role === "ADMIN")
+    ) {
+      customer = await prisma.customer.findUnique({
+        where: { id: onBehalfOfCustomerId },
+      });
+      if (!customer) {
+        return res
+          .status(404)
+          .json({ error: { message: "Target customer not found." } });
+      }
+    } else {
+      customer = await prisma.customer.findUnique({
+        where: { userId: req.user.id },
+      });
+    }
 
     if (!customer) {
       return res
@@ -260,31 +312,43 @@ const getBookingById = async (req, res, next) => {
   }
 };
 
-// POST /api/bookings/:id/cancel
-const cancelBooking = async (req, res, next) => {
+// GET /api/bookings/:id/cancellation-quote
+// Preview the fee + refund the customer would get if they cancelled now.
+const getCancellationQuote = async (req, res, next) => {
   try {
-    const booking = await prisma.booking.findUnique({
-      where: { id: req.params.id },
-      include: { items: true },
-    });
-
+    const booking = await loadFullBooking(req.params.id);
     if (!booking) {
       return res
         .status(404)
         .json({ error: { message: "Booking not found." } });
     }
+    const blocked = await ensureOwnership(req, booking);
+    if (blocked) return res.status(blocked.code).json({ error: { message: blocked.message } });
 
-    // Ownership check for customers
-    if (req.user.role === "CUSTOMER") {
-      const customer = await prisma.customer.findUnique({
-        where: { userId: req.user.id },
+    if (booking.status === "CANCELLED") {
+      return res.status(400).json({
+        error: { message: "Booking is already cancelled." },
       });
-      if (booking.customerId !== customer.id) {
-        return res
-          .status(403)
-          .json({ error: { message: "Access denied." } });
-      }
     }
+
+    const quote = quoteCancellation(booking);
+    res.json({ quote });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// POST /api/bookings/:id/cancel
+const cancelBooking = async (req, res, next) => {
+  try {
+    const booking = await loadFullBooking(req.params.id);
+    if (!booking) {
+      return res
+        .status(404)
+        .json({ error: { message: "Booking not found." } });
+    }
+    const blocked = await ensureOwnership(req, booking);
+    if (blocked) return res.status(blocked.code).json({ error: { message: blocked.message } });
 
     if (booking.status === "CANCELLED") {
       return res
@@ -292,13 +356,9 @@ const cancelBooking = async (req, res, next) => {
         .json({ error: { message: "Booking is already cancelled." } });
     }
 
-    // Calculate cancellation fee (simple policy: 20% default)
-    const cancellationFeePercent = 20;
-    const cancellationFee =
-      Number(booking.totalAmount) * (cancellationFeePercent / 100);
-    const refundAmount = Number(booking.totalAmount) - cancellationFee;
+    const quote = quoteCancellation(booking);
 
-    // Cancel and restore availability
+    // Cancel + restore availability + record cancellation fee as a discount-style adjustment
     await prisma.$transaction(async (tx) => {
       await tx.booking.update({
         where: { id: booking.id },
@@ -321,10 +381,47 @@ const cancelBooking = async (req, res, next) => {
       }
     });
 
+    // Refund stub: when Stripe is configured + a payment exists, attempt
+    // a real refund. Otherwise just acknowledge.
+    let refund = { mode: "demo", amount: quote.refundAmount };
+    if (booking.payments?.length && process.env.STRIPE_SECRET_KEY?.startsWith("sk_")) {
+      try {
+        const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+        const lastPayment = booking.payments[booking.payments.length - 1];
+        if (lastPayment?.transactionNumber) {
+          await stripe.refunds.create({
+            payment_intent: lastPayment.transactionNumber,
+            amount: Math.round(quote.refundAmount * 100),
+          });
+          refund = { mode: "stripe", amount: quote.refundAmount };
+        }
+      } catch (err) {
+        console.error("[cancel] Stripe refund failed:", err.message);
+        refund = { mode: "demo", amount: quote.refundAmount, error: err.message };
+      }
+    }
+
+    // Fire the cancellation email (best-effort)
+    const customerEmail = booking.customer?.user?.email;
+    if (customerEmail) {
+      sendBookingCancellation({
+        booking,
+        customerEmail,
+        cancellationFee: quote.feeAmount,
+        refundAmount: quote.refundAmount,
+      }).catch((err) =>
+        console.error("[notifications] cancellation email failed:", err.message)
+      );
+    }
+
     res.json({
       message: "Booking cancelled.",
-      cancellationFee,
-      refundAmount,
+      cancellationFee: quote.feeAmount,
+      refundAmount: quote.refundAmount,
+      feePercent: quote.feePercent,
+      tier: quote.tier,
+      reason: quote.reason,
+      refund,
     });
   } catch (error) {
     next(error);
@@ -332,19 +429,21 @@ const cancelBooking = async (req, res, next) => {
 };
 
 // PUT /api/bookings/:id/modify
+// Body: { passengers?, items?: [{ id, checkIn?, checkOut?, seatClass? }] }
+// "items" supports updating per-item dates (hotels) or seat class (flights);
+// totals are recomputed from current inventory pricing on changed items.
 const modifyBooking = async (req, res, next) => {
   try {
-    const { passengers } = req.body;
+    const { passengers, items: itemUpdates } = req.body;
 
-    const booking = await prisma.booking.findUnique({
-      where: { id: req.params.id },
-    });
-
+    const booking = await loadFullBooking(req.params.id);
     if (!booking) {
       return res
         .status(404)
         .json({ error: { message: "Booking not found." } });
     }
+    const blocked = await ensureOwnership(req, booking);
+    if (blocked) return res.status(blocked.code).json({ error: { message: blocked.message } });
 
     if (booking.status === "CANCELLED") {
       return res
@@ -352,21 +451,67 @@ const modifyBooking = async (req, res, next) => {
         .json({ error: { message: "Cannot modify a cancelled booking." } });
     }
 
-    // Ownership check
-    if (req.user.role === "CUSTOMER") {
-      const customer = await prisma.customer.findUnique({
-        where: { userId: req.user.id },
-      });
-      if (booking.customerId !== customer.id) {
-        return res
-          .status(403)
-          .json({ error: { message: "Access denied." } });
-      }
-    }
+    const changes = [];
 
-    // Update passengers if provided
-    if (passengers) {
-      await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx) => {
+      // ── ITEM-LEVEL UPDATES (dates / seat class) ──
+      if (Array.isArray(itemUpdates) && itemUpdates.length > 0) {
+        for (const upd of itemUpdates) {
+          const item = booking.items.find((i) => i.id === upd.id);
+          if (!item) continue;
+
+          // Hotel: date change → recompute price by nightly rate
+          if (item.hotelId && (upd.checkIn || upd.checkOut)) {
+            const checkIn = upd.checkIn ? new Date(upd.checkIn) : item.checkIn;
+            const checkOut = upd.checkOut ? new Date(upd.checkOut) : item.checkOut;
+            const nights = Math.max(
+              1,
+              Math.ceil((checkOut - checkIn) / 86400000)
+            );
+            const unitPrice = Number(item.hotel.pricePerNight) * nights;
+            await tx.bookingItem.update({
+              where: { id: item.id },
+              data: { checkIn, checkOut, unitPrice },
+            });
+            changes.push(
+              `Hotel "${item.hotel.name}" rescheduled to ${checkIn
+                .toISOString()
+                .slice(0, 10)} → ${checkOut.toISOString().slice(0, 10)} (${nights} night${nights === 1 ? "" : "s"})`
+            );
+          }
+
+          // Flight: seat class change → reprice per cabin
+          if (item.flightId && upd.seatClass && upd.seatClass !== item.seatClass) {
+            const newPrice =
+              upd.seatClass === "business" && item.flight.businessPrice
+                ? Number(item.flight.businessPrice)
+                : Number(item.flight.economyPrice);
+            await tx.bookingItem.update({
+              where: { id: item.id },
+              data: { seatClass: upd.seatClass, unitPrice: newPrice },
+            });
+            changes.push(
+              `Flight ${item.flight.flightNumber} cabin changed to ${upd.seatClass}`
+            );
+          }
+        }
+
+        // Recompute total
+        const refreshed = await tx.bookingItem.findMany({
+          where: { bookingId: booking.id },
+        });
+        const newTotal = refreshed.reduce(
+          (sum, i) => sum + Number(i.unitPrice) * (i.quantity || 1),
+          0
+        );
+        await tx.booking.update({
+          where: { id: booking.id },
+          data: { totalAmount: newTotal, status: "MODIFIED" },
+        });
+      }
+
+      // ── PASSENGER REPLACEMENT ──
+      if (Array.isArray(passengers) && passengers.length > 0) {
         await tx.passenger.deleteMany({ where: { bookingId: booking.id } });
         await tx.passenger.createMany({
           data: passengers.map((p) => ({
@@ -384,24 +529,29 @@ const modifyBooking = async (req, res, next) => {
             specialRequests: p.specialRequests || [],
           })),
         });
-
         await tx.booking.update({
           where: { id: booking.id },
           data: { status: "MODIFIED" },
         });
-      });
-    }
-
-    const updated = await prisma.booking.findUnique({
-      where: { id: booking.id },
-      include: {
-        items: { include: { flight: true, hotel: true, package: true } },
-        passengers: true,
-        invoice: true,
-      },
+        changes.push(`Passenger list updated (${passengers.length} traveler${passengers.length === 1 ? "" : "s"})`);
+      }
     });
 
-    res.json({ message: "Booking modified.", booking: updated });
+    const updated = await loadFullBooking(booking.id);
+
+    // Best-effort email
+    const customerEmail = updated.customer?.user?.email;
+    if (customerEmail && changes.length > 0) {
+      sendBookingModification({
+        booking: updated,
+        customerEmail,
+        changes,
+      }).catch((err) =>
+        console.error("[notifications] modification email failed:", err.message)
+      );
+    }
+
+    res.json({ message: "Booking modified.", booking: updated, changes });
   } catch (error) {
     next(error);
   }
@@ -446,11 +596,55 @@ const getAllBookings = async (req, res, next) => {
   }
 };
 
+// GET /api/bookings/:id/invoice.pdf
+// Streams a styled PDF invoice for a confirmed booking. Customers can
+// only download their own; agents/admins can download any.
+const downloadInvoicePdf = async (req, res, next) => {
+  try {
+    const booking = await loadFullBooking(req.params.id);
+    if (!booking) {
+      return res
+        .status(404)
+        .json({ error: { message: "Booking not found." } });
+    }
+    const blocked = await ensureOwnership(req, booking);
+    if (blocked) return res.status(blocked.code).json({ error: { message: blocked.message } });
+
+    if (!booking.invoice) {
+      return res.status(400).json({
+        error: {
+          message: "No invoice available — payment must be completed first.",
+        },
+      });
+    }
+
+    const customer = await prisma.customer.findUnique({
+      where: { id: booking.customerId },
+      include: { user: { select: { email: true } } },
+    });
+    const customerProfile = {
+      firstName: customer?.firstName,
+      lastName: customer?.lastName,
+      email: customer?.user?.email,
+      phone: customer?.phone,
+      street: customer?.street,
+      city: customer?.city,
+      state: customer?.state,
+    };
+
+    streamInvoicePdf({ booking, customer: customerProfile, response: res });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   createBooking,
   getMyBookings,
   getBookingById,
+  getCancellationQuote,
   cancelBooking,
   modifyBooking,
   getAllBookings,
+  downloadInvoicePdf,
 };

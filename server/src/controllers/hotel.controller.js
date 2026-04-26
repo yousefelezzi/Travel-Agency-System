@@ -1,4 +1,5 @@
 const prisma = require("../config/db");
+const { searchExternalHotels, ENABLED: EXTERNAL_ENABLED } = require("../services/external-inventory.service");
 
 // GET /api/hotels?city=&country=&checkIn=&checkOut=&maxPrice=&minRating=&page=&limit=
 const searchHotels = async (req, res, next) => {
@@ -6,6 +7,9 @@ const searchHotels = async (req, res, next) => {
     const {
       city,
       country,
+      checkIn,
+      checkOut,
+      guests,
       maxPrice,
       minRating,
       page = 1,
@@ -23,7 +27,19 @@ const searchHotels = async (req, res, next) => {
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    const [hotels, total] = await Promise.all([
+    const wantLive = EXTERNAL_ENABLED && city;
+    const livePromise = wantLive
+      ? searchExternalHotels({
+          city,
+          country,
+          checkIn,
+          checkOut,
+          guests: parseInt(guests || 2),
+        })
+      : Promise.resolve({ hotels: [], totalAvailable: 0 });
+
+    const [liveResult, dbHotels, total] = await Promise.all([
+      livePromise.catch(() => ({ hotels: [], totalAvailable: 0 })),
       prisma.hotel.findMany({
         where,
         orderBy: { pricePerNight: "asc" },
@@ -33,13 +49,22 @@ const searchHotels = async (req, res, next) => {
       prisma.hotel.count({ where }),
     ]);
 
+    const liveHotels = liveResult.hotels || [];
+    const filteredLive = liveHotels.filter((h) => {
+      if (maxPrice && h.pricePerNight > parseFloat(maxPrice)) return false;
+      if (minRating && h.starRating < parseInt(minRating)) return false;
+      return true;
+    });
+
     res.json({
-      hotels,
+      hotels: [...filteredLive, ...dbHotels],
+      live: filteredLive.length,
+      liveTotalAvailable: liveResult.totalAvailable || 0,
       pagination: {
         page: parseInt(page),
         limit: parseInt(limit),
-        total,
-        totalPages: Math.ceil(total / parseInt(limit)),
+        total: total + (liveResult.totalAvailable || filteredLive.length),
+        totalPages: Math.ceil((total + filteredLive.length) / parseInt(limit)),
       },
     });
   } catch (error) {

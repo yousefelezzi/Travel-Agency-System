@@ -25,7 +25,11 @@ const registerRules = [
     .withMessage("Password must contain at least one special character."),
   body("firstName").notEmpty().withMessage("First name is required."),
   body("lastName").notEmpty().withMessage("Last name is required."),
-  body("dateOfBirth").isISO8601().withMessage("Valid date of birth is required."),
+  // dateOfBirth is only required for customer (traveler) accounts.
+  body("dateOfBirth")
+    .if((value, { req }) => !req.body.role || req.body.role === "CUSTOMER")
+    .isISO8601()
+    .withMessage("Valid date of birth is required."),
   handleValidation,
 ];
 

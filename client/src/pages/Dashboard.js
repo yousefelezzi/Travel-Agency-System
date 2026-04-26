@@ -75,7 +75,7 @@ function RouteVisual({ item }) {
   return null;
 }
 
-function BookingCard({ b, onCancel, cancellingId, navigate }) {
+function BookingCard({ b, onCancel, onDownloadInvoice, cancellingId, navigate }) {
   const ctx = getContext(b);
   const first = b.items?.[0];
   const typeMeta = getTypeMeta(first);
@@ -175,6 +175,15 @@ function BookingCard({ b, onCancel, cancellingId, navigate }) {
               Pay now
             </button>
           )}
+          {b.invoice && (
+            <button
+              className="btn btn-outline btn-sm"
+              onClick={(e) => { stop(e); onDownloadInvoice(b); }}
+              title="Download invoice PDF"
+            >
+              Invoice
+            </button>
+          )}
           {(b.status === "CONFIRMED" || b.status === "PENDING") && (
             <button
               className="dash-cancel"
@@ -210,21 +219,41 @@ export default function Dashboard() {
 
   useEffect(() => { fetchBookings(); }, []);
 
-  const handleCancel = async (booking) => {
-    const isPaid = booking.status === "CONFIRMED";
-    const confirmMsg = isPaid
-      ? "Cancel this booking? A 20% cancellation fee applies."
-      : "Cancel this unpaid booking?";
-    if (!window.confirm(confirmMsg)) return;
+  const handleDownloadInvoice = async (booking) => {
+    try {
+      const res = await api.get(`/bookings/${booking.id}/invoice.pdf`, {
+        responseType: "blob",
+      });
+      const url = window.URL.createObjectURL(
+        new Blob([res.data], { type: "application/pdf" })
+      );
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `ATLAS-${booking.invoice?.invoiceNumber || booking.id.slice(0, 8)}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      alert(err.response?.data?.error?.message || "Couldn't download invoice.");
+    }
+  };
 
+  const handleCancel = async (booking) => {
     setCancellingId(booking.id);
     try {
-      const res = await api.post(`/bookings/${booking.id}/cancel`);
-      if (isPaid) {
-        alert(`Booking cancelled. Refund: $${res.data.refundAmount.toFixed(2)} (Fee: $${res.data.cancellationFee.toFixed(2)})`);
-      } else {
-        alert("Booking cancelled.");
+      // Fetch the live quote so the user sees the actual fee, not a guess
+      const quoteRes = await api.get(`/bookings/${booking.id}/cancellation-quote`);
+      const q = quoteRes.data.quote;
+      const isPaid = booking.status === "CONFIRMED";
+      const msg = isPaid
+        ? `Cancel this booking?\n\nFee (${q.feePercent}%): $${q.feeAmount.toFixed(2)}\nRefund: $${q.refundAmount.toFixed(2)}\n\n${q.reason || ""}`
+        : "Cancel this unpaid booking? No charge applies.";
+      if (!window.confirm(msg)) {
+        setCancellingId(null);
+        return;
       }
+      await api.post(`/bookings/${booking.id}/cancel`);
       fetchBookings();
     } catch (err) {
       alert(err.response?.data?.error?.message || "Cancel failed");
@@ -312,6 +341,7 @@ export default function Dashboard() {
                   key={b.id}
                   b={b}
                   onCancel={handleCancel}
+                  onDownloadInvoice={handleDownloadInvoice}
                   cancellingId={cancellingId}
                   navigate={navigate}
                 />

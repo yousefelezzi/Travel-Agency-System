@@ -11,10 +11,19 @@ const browsePackages = async (req, res, next) => {
 
     if (maxPrice) where.price = { lte: parseFloat(maxPrice) };
     if (search) {
-      where.OR = [
-        { packageName: { contains: search, mode: "insensitive" } },
-        { description: { contains: search, mode: "insensitive" } },
-      ];
+      // Split into tokens so "Reykjavík Iceland" matches a package named
+      // "Iceland Aurora Adventure" — quiz destinations like Reykjavík don't
+      // appear by name in any package, but their country does.
+      const tokens = String(search)
+        .split(/\s+/)
+        .map((t) => t.trim())
+        .filter(Boolean);
+      if (tokens.length > 0) {
+        where.OR = tokens.flatMap((t) => [
+          { packageName: { contains: t, mode: "insensitive" } },
+          { description: { contains: t, mode: "insensitive" } },
+        ]);
+      }
     }
 
     const skip = (parseInt(page) - 1) * parseInt(limit);

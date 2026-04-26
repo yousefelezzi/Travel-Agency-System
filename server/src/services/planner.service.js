@@ -84,10 +84,17 @@ function trimForPrompt(candidates) {
 async function generateWithClaude(prefs, candidates) {
   const days = computeDays(prefs.startDate, prefs.endDate);
 
+<<<<<<< Updated upstream
+=======
+  const contextLine = prefs.context
+    ? `\nAdditional context from the traveler's profile / quiz:\n${prefs.context}\n`
+    : "";
+
+>>>>>>> Stashed changes
   const prompt = `You are a premium travel planner for ATLAS (Travel Agency System).
 
 Plan a trip using ONLY the real options below. Pick the single best flight and hotel (and optionally a package) that match the traveler's preferences. Then create a concise day-by-day itinerary.
-
+${contextLine}
 Traveler preferences:
 ${JSON.stringify(prefs, null, 2)}
 
@@ -234,21 +241,25 @@ async function hydratePlan(plan) {
 
 async function generatePlan(prefs) {
   const candidates = await findCandidates(prefs);
+  const trimmed = trimForPrompt(candidates);
 
   let plan;
   if (isConfigured) {
     try {
-      plan = await generateWithClaude(prefs, trimForPrompt(candidates));
+      plan = await generateWithClaude(prefs, trimmed);
       plan._mode = "ai";
     } catch (err) {
       console.error("[planner] Claude failed, using fallback:", err.message);
-      plan = generateFallback(prefs, trimForPrompt(candidates));
+      plan = generateFallback(prefs, trimmed);
       plan._mode = "fallback";
       plan._error = err.message;
     }
   } else {
-    plan = generateFallback(prefs, trimForPrompt(candidates));
+    plan = generateFallback(prefs, trimmed);
   }
+
+  // Authoritative total from actual picks + day count
+  plan.estimatedTotal = recomputeTotal({ plan, prefs, candidates: trimmed });
 
   return {
     plan: await hydratePlan(plan),
@@ -260,4 +271,279 @@ async function generatePlan(prefs) {
   };
 }
 
-module.exports = { generatePlan };
+// ─── REFINE FLOW ───────────────────────────────────────────────────────────
+
+async function refineWithClaude({ prefs, plan, instruction, history, candidates }) {
+  const contextLine = prefs.context
+    ? `\nTraveler profile: ${prefs.context}\n`
+    : "";
+
+  const historyLine =
+    Array.isArray(history) && history.length
+      ? `\nRecent refinement turns:\n${history
+          .slice(-4)
+          .map((m) => `${m.role}: ${m.content}`)
+          .join("\n")}\n`
+      : "";
+
+  const prompt = `You are an ATLAS travel concierge refining an existing trip plan.
+${contextLine}
+Traveler preferences:
+${JSON.stringify(prefs, null, 2)}
+
+Current plan:
+${JSON.stringify(plan, null, 2)}
+
+Available alternatives in our inventory:
+${JSON.stringify(candidates, null, 2)}
+${historyLine}
+The traveler just said:
+"${instruction}"
+
+Update the plan to satisfy the request. Keep what already works; change only what the request asks for. If the request is to change destination, swap to one that matches the traveler's vibe. If "cheaper" — swap to lower-priced flight/hotel and trim costly activities. If "luxury" — pick higher-rated stays. If "shorter/longer" — adjust days array.
+
+CRITICAL HONESTY RULES:
+- If the inventory above doesn't actually let you do the request (e.g. user asks "make flight cheaper" but the current chosenFlightId is already the cheapest economyPrice), DO NOT pretend you swapped. Keep the current chosen IDs and write the "change" field as something like: "No cheaper flight is currently available for this route — already on the lowest fare."
+- Same rule for hotels, packages, and destination swaps.
+- Never invent IDs not present in the inventory above.
+- Always pick chosenFlightId and chosenHotelId from the inventory IDs above, or set them to null. Don't make IDs up.
+
+Return ONLY valid JSON with this schema:
+{
+  "summary": "...",
+  "chosenFlightId": "<id or null>",
+  "chosenHotelId": "<id or null>",
+  "chosenPackageId": "<id or null>",
+  "rationale": "...",
+  "days": [ { "day": 1, "title": "...", "activities": ["...", "..."] } ],
+  "estimatedTotal": <number>,
+  "extrasTotal": <number — sum of any added non-inventory costs (nightlife, spa, luxury concierge, etc.) so the server can recompute the total reliably; 0 if no extras>,
+  "newDestination": "<city name or null — only set if you swapped destinations>",
+  "change": "1-2 sentences telling the user what you changed and why"
+}`;
+
+  const res = await client.messages.create({
+    model: MODEL,
+    max_tokens: 1500,
+    messages: [{ role: "user", content: prompt }],
+  });
+
+  const text = res.content.find((b) => b.type === "text")?.text || "";
+  return extractJson(text);
+}
+
+// Per-night cost added per refinement type (USD)
+const EXTRA_PRICING = {
+  nightlife: 45,    // bar / club cover per evening
+  luxuryFee: 200,   // one-time luxury concierge upgrade
+  spa: 30,          // per relaxation upgrade day
+};
+
+async function refineFallback({ prefs, plan, instruction, candidates }) {
+  const text = String(instruction || "").toLowerCase();
+  const next = JSON.parse(JSON.stringify(plan));
+  let change = "";
+  if (typeof next.extrasTotal !== "number") next.extrasTotal = 0;
+
+  // Strip already-loaded full records to avoid duplicate IDs in update
+  delete next.chosenFlight;
+  delete next.chosenHotel;
+  delete next.chosenPackage;
+
+  const days = Array.isArray(next.days) && next.days.length
+    ? next.days.length
+    : computeDays(prefs.startDate, prefs.endDate);
+
+  if (text.includes("cheap") || text.includes("budget") || text.includes("less")) {
+    const cheapFlight = [...candidates.flights].sort((a, b) => a.economyPrice - b.economyPrice)[0];
+    const cheapHotel = [...candidates.hotels].sort((a, b) => a.pricePerNight - b.pricePerNight)[0];
+
+    const flightSwapped = cheapFlight && cheapFlight.id !== next.chosenFlightId;
+    const hotelSwapped = cheapHotel && cheapHotel.id !== next.chosenHotelId;
+
+    if (cheapFlight) next.chosenFlightId = cheapFlight.id;
+    if (cheapHotel) next.chosenHotelId = cheapHotel.id;
+    // Wipe extras when going cheap
+    const hadExtras = (next.extrasTotal || 0) > 0;
+    next.extrasTotal = 0;
+
+    if (!flightSwapped && !hotelSwapped && !hadExtras) {
+      change = "You're already on the lowest-priced flight + stay we have. No cheaper option to swap to right now.";
+    } else {
+      const parts = [];
+      if (flightSwapped) parts.push("flight");
+      if (hotelSwapped) parts.push("stay");
+      if (hadExtras) parts.push("extras");
+      change = `Trimmed your ${parts.join(", ")} to the lowest-priced inventory.`;
+    }
+  } else if (text.includes("luxury") || text.includes("upgrade")) {
+    const lux = [...candidates.hotels]
+      .sort((a, b) => (b.starRating || 0) - (a.starRating || 0) || b.pricePerNight - a.pricePerNight)[0];
+
+    const hotelSwapped = lux && lux.id !== next.chosenHotelId;
+
+    if (lux) next.chosenHotelId = lux.id;
+
+    if (!hotelSwapped) {
+      change = "You're already booked into our top-rated stay for this destination — nothing to upgrade to.";
+    } else {
+      // Bump extras with a luxury concierge fee
+      next.extrasTotal = (next.extrasTotal || 0) + EXTRA_PRICING.luxuryFee;
+      next.days = (next.days || []).map((d) => ({
+        ...d,
+        activities: [...(d.activities || []), "Private guide & premium tasting"],
+      }));
+      change = `Upgraded to our top-rated stay and added a luxury concierge ($${EXTRA_PRICING.luxuryFee}).`;
+    }
+  } else if (text.includes("nightlife") || text.includes("party")) {
+    next.days = (next.days || []).map((d) => ({
+      ...d,
+      activities: [...(d.activities || []), "Late-night cocktails at a local hotspot"],
+    }));
+    next.extrasTotal = (next.extrasTotal || 0) + EXTRA_PRICING.nightlife * days;
+    change = `Added an evening nightlife stop to each day (+$${EXTRA_PRICING.nightlife}/night).`;
+  } else if (text.includes("relax") || text.includes("calmer") || text.includes("slower")) {
+    next.days = (next.days || []).map((d) => ({
+      ...d,
+      activities: (d.activities || []).slice(0, 2).concat(["Slow afternoon — pool, spa, or quiet café"]),
+    }));
+    // Add a small spa fee per day, but trim any nightlife extras
+    next.extrasTotal = EXTRA_PRICING.spa * days;
+    change = `Trimmed busy activities and added a daily spa/relax fee (+$${EXTRA_PRICING.spa}/day).`;
+  } else if (text.includes("shorter")) {
+    const newDays = Math.max(1, (next.days || []).length - 2);
+    const ratio = newDays / Math.max(1, (next.days || []).length || 1);
+    next.days = (next.days || []).slice(0, newDays);
+    // Scale extras proportionally to the shorter trip
+    next.extrasTotal = Math.round((next.extrasTotal || 0) * ratio);
+    change = "Shortened the trip by 2 days.";
+  } else if (text.includes("longer") || text.includes("extend")) {
+    const prevLen = (next.days || []).length;
+    const extra = {
+      day: prevLen + 1,
+      title: "Bonus day",
+      activities: ["Hidden gem you missed", "Long lunch", "Sunset spot"],
+    };
+    next.days = [...(next.days || []), extra];
+    // Scale extras proportionally to the longer trip
+    if (prevLen > 0) {
+      next.extrasTotal = Math.round((next.extrasTotal || 0) * ((prevLen + 1) / prevLen));
+    }
+    change = "Added an extra day with hidden-gem activities.";
+  } else if (text.includes("destination") || text.includes("change") || text.includes("swap") || text.includes("different")) {
+    // Need a wider candidate pool to swap destinations
+    const broader = await findCandidates({ ...prefs, destination: "" });
+    const trimmedBroader = trimForPrompt(broader);
+    const currentArrival =
+      candidates.flights.find((f) => f.id === next.chosenFlightId)?.to || null;
+    const altFlight = trimmedBroader.flights.find(
+      (f) => f.to && f.to !== currentArrival
+    );
+    if (altFlight) {
+      next.chosenFlightId = altFlight.id;
+      const altHotel = trimmedBroader.hotels.find((h) => h.city === altFlight.to);
+      if (altHotel) next.chosenHotelId = altHotel.id;
+      next.chosenPackageId = null;
+      next.newDestination = altFlight.to;
+      next.summary = `A new direction — ${altFlight.to} — same vibe, different scenery.`;
+      next.rationale = `Swapped to ${altFlight.to} based on the next-best fit in our inventory.`;
+      // Re-broadened candidates need to be exposed for recompute
+      next._refineCandidates = trimmedBroader;
+      change = `Switched destination to ${altFlight.to}.`;
+    } else {
+      change =
+        "Couldn't find an alternative destination in current inventory — try a broader search.";
+    }
+  } else {
+    change =
+      "Demo mode is on, so I made a small adjustment. Add your ANTHROPIC_API_KEY for full refinement.";
+  }
+
+  next._mode = "fallback";
+  next.change = change;
+  return next;
+}
+
+// Always derive the total from the actual chosen items + trip length so the
+// number stays in sync no matter what Claude (or the fallback) returns.
+function recomputeTotal({ plan, prefs, candidates }) {
+  const travelers = Math.max(1, parseInt(prefs.travelers, 10) || 1);
+
+  const flight = plan.chosenFlightId
+    ? candidates.flights.find((f) => f.id === plan.chosenFlightId)
+    : null;
+  const hotel = plan.chosenHotelId
+    ? candidates.hotels.find((h) => h.id === plan.chosenHotelId)
+    : null;
+  const pkg = plan.chosenPackageId
+    ? candidates.packages.find((p) => p.id === plan.chosenPackageId)
+    : null;
+
+  // Prefer day count from the itinerary (chat may have shortened/lengthened it),
+  // fall back to date math.
+  const days = Array.isArray(plan.days) && plan.days.length
+    ? plan.days.length
+    : computeDays(prefs.startDate, prefs.endDate);
+
+  let total = 0;
+  if (flight) total += Number(flight.economyPrice || 0) * travelers;
+  if (hotel) total += Number(hotel.pricePerNight || 0) * days;
+  if (pkg) {
+    const discounted =
+      Number(pkg.price || 0) * (1 - Number(pkg.discount || 0) / 100);
+    total += discounted * travelers;
+  }
+  // Extras: nightlife, luxury fees, spa, etc. These are added by refinement
+  // handlers (or returned by Claude for non-inventory line items).
+  if (typeof plan.extrasTotal === "number") {
+    total += Math.max(0, plan.extrasTotal);
+  }
+
+  return Math.round(total * 100) / 100;
+}
+
+async function refinePlan({ prefs, plan, instruction, history }) {
+  const candidates = await findCandidates(prefs);
+  const trimmed = trimForPrompt(candidates);
+  const previousTotal = Number(plan.estimatedTotal) || 0;
+
+  let updated;
+  if (isConfigured) {
+    try {
+      updated = await refineWithClaude({
+        prefs,
+        plan,
+        instruction,
+        history,
+        candidates: trimmed,
+      });
+      updated._mode = "ai";
+    } catch (err) {
+      console.error("[planner.refine] Claude failed, using fallback:", err.message);
+      updated = await refineFallback({ prefs, plan, instruction, candidates: trimmed });
+      updated._error = err.message;
+    }
+  } else {
+    updated = await refineFallback({ prefs, plan, instruction, candidates: trimmed });
+  }
+
+  // For "change destination" the fallback may have widened the candidate
+  // pool. Use that pool when recomputing so the new flight/hotel resolve.
+  const recomputeCandidates = updated._refineCandidates || trimmed;
+  delete updated._refineCandidates;
+
+  // Authoritative total — overrides whatever the model returned.
+  updated.estimatedTotal = recomputeTotal({
+    plan: updated,
+    prefs,
+    candidates: recomputeCandidates,
+  });
+
+  return {
+    plan: await hydratePlan(updated),
+    change: updated.change || "Plan updated.",
+    previousTotal,
+  };
+}
+
+module.exports = { generatePlan, refinePlan };

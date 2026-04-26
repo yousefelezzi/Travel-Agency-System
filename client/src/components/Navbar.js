@@ -34,16 +34,25 @@ export default function Navbar() {
           AI Planner
           <span className="nav-pill">new</span>
         </NavLink>
+<<<<<<< Updated upstream
+=======
+        <NavLink to="/support">Support</NavLink>
+>>>>>>> Stashed changes
         {user ? (
           <>
             <NavLink to="/dashboard">Dashboard</NavLink>
             {(user.role === "ADMIN" || user.role === "TRAVEL_AGENT") && (
+<<<<<<< Updated upstream
               <NavLink to="/admin">Admin</NavLink>
+=======
+              <NavLink to="/agent">Agent</NavLink>
+>>>>>>> Stashed changes
             )}
+            {user.role === "ADMIN" && <NavLink to="/admin">Admin</NavLink>}
             <button onClick={handleLogout} className="btn btn-outline">
               Logout
             </button>
-            <span className="nav-user">{user.email}</span>
+            <span className="nav-user">{user.username || user.email}</span>
           </>
         ) : (
           <>

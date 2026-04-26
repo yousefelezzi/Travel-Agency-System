@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import api from "../services/api";
 
 /* ── hero images ── */
@@ -106,13 +106,16 @@ export default function Packages() {
   const [maxPrice, setMaxPrice] = useState("");
   const [pagination, setPagination] = useState({});
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
-  const fetchPackages = async (page = 1) => {
+  const fetchPackages = async (page = 1, overrides = null) => {
     setLoading(true);
     try {
-      const params = { page, limit: 12 };
-      if (searchText) params.search = searchText;
-      if (maxPrice) params.maxPrice = maxPrice;
+      const params = { page, limit: 24 };
+      const useSearch = overrides?.search ?? searchText;
+      const useMax = overrides?.maxPrice ?? maxPrice;
+      if (useSearch) params.search = useSearch;
+      if (useMax) params.maxPrice = useMax;
       const res = await api.get("/packages", { params });
       setPackages(res.data.packages || []);
       setPagination(res.data.pagination || {});
@@ -123,7 +126,19 @@ export default function Packages() {
     }
   };
 
-  useEffect(() => { fetchPackages(); /* eslint-disable-next-line */ }, []);
+  useEffect(() => {
+    const destUrl =
+      searchParams.get("destination") ||
+      searchParams.get("search") ||
+      "";
+    if (destUrl) {
+      setSearchText(destUrl);
+      fetchPackages(1, { search: destUrl });
+    } else {
+      fetchPackages();
+    }
+    /* eslint-disable-next-line */
+  }, []);
 
   const handleSearch = (e) => {
     e.preventDefault();
@@ -154,7 +169,11 @@ export default function Packages() {
 
   const resultsHeadline = () => {
     const count = filteredSorted.length;
+    const total = pagination?.total || count;
     if (!count) return "No packages available";
+    if (total > count) {
+      return `Showing ${count} of ${total.toLocaleString()} package${total === 1 ? "" : "s"} available`;
+    }
     return `${count} package${count === 1 ? "" : "s"} available`;
   };
 
@@ -294,12 +313,27 @@ export default function Packages() {
         ) : (
           <div className="packages-grid">
             {filteredSorted.map((p, idx) => {
-              const hasDiscount = Number(p.discount) > 0;
-              const originalPrice = Number(p.price);
-              const finalPrice = originalPrice * (1 - Number(p.discount || 0) / 100);
+              const rawPrice = p.price ?? null;
+              const parsedPrice =
+                rawPrice !== null && rawPrice !== "" && Number.isFinite(Number(rawPrice))
+                  ? Number(rawPrice)
+                  : null;
+              const hasValidPrice = parsedPrice !== null && parsedPrice > 0;
+              const hasDiscount = hasValidPrice && Number(p.discount) > 0;
+              const originalPrice = hasValidPrice ? parsedPrice : 0;
+              const finalPrice = hasValidPrice
+                ? originalPrice * (1 - Number(p.discount || 0) / 100)
+                : 0;
               const savings = originalPrice - finalPrice;
               const cue = emotionalCue(p);
               const imgSrc = packageImage(p, idx);
+
+              if (!hasValidPrice && process.env.NODE_ENV !== "production") {
+                console.warn(
+                  "[packages] Package missing or invalid price — rendering as Price on request",
+                  { id: p.id, name: p.packageName, price: p.price }
+                );
+              }
 
               return (
                 <article
@@ -357,10 +391,23 @@ export default function Packages() {
 
                     <div className="package-card-footer">
                       <div className="package-card-price-block">
-                        {hasDiscount && <div className="package-card-original">${originalPrice.toFixed(0)}</div>}
-                        <div className="package-card-price">${finalPrice.toFixed(0)}</div>
-                        <div className="package-card-price-unit">/ person</div>
-                        {hasDiscount && <div className="package-card-savings">You save ${savings.toFixed(0)}</div>}
+                        {hasValidPrice ? (
+                          <>
+                            {hasDiscount && (
+                              <div className="package-card-original">${originalPrice.toFixed(0)}</div>
+                            )}
+                            <div className="package-card-price">${finalPrice.toFixed(0)}</div>
+                            <div className="package-card-price-unit">/ person</div>
+                            {hasDiscount && (
+                              <div className="package-card-savings">You save ${savings.toFixed(0)}</div>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            <div className="package-card-price">Price on request</div>
+                            <div className="package-card-price-unit">contact us</div>
+                          </>
+                        )}
                       </div>
                       <button className="package-book-btn" onClick={(e) => { e.stopPropagation(); navigate(`/book?type=package&id=${p.id}`); }}>
                         View Trip

@@ -13,6 +13,14 @@ import Payment from "./pages/Payment";
 import Dashboard from "./pages/Dashboard";
 import BookingDetails from "./pages/BookingDetails";
 import Planner from "./pages/Planner";
+import Quiz from "./pages/Quiz";
+import QuizResults from "./pages/QuizResults";
+import Build from "./pages/Build";
+import Destination from "./pages/Destination";
+import Support from "./pages/Support";
+import AgentDashboard from "./pages/AgentDashboard";
+import AdminDashboard from "./pages/AdminDashboard";
+import Careers from "./pages/Careers";
 import "./App.css";
 
 function App() {
@@ -28,10 +36,32 @@ function App() {
             <Route path="/flights" element={<Flights />} />
             <Route path="/hotels" element={<Hotels />} />
             <Route path="/packages" element={<Packages />} />
+            <Route path="/quiz" element={<Quiz />} />
+            <Route path="/quiz/results" element={<QuizResults />} />
+            <Route path="/build" element={<Build />} />
+            <Route path="/destination/:slug" element={<Destination />} />
+            <Route path="/support" element={<Support />} />
+            <Route
+              path="/agent"
+              element={
+                <ProtectedRoute roles={["TRAVEL_AGENT", "ADMIN"]}>
+                  <AgentDashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin"
+              element={
+                <ProtectedRoute roles={["ADMIN"]}>
+                  <AdminDashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route path="/careers" element={<Careers />} />
             <Route
               path="/book"
               element={
-                <ProtectedRoute roles={["CUSTOMER"]}>
+                <ProtectedRoute roles={["CUSTOMER", "TRAVEL_AGENT", "ADMIN"]}>
                   <Book />
                 </ProtectedRoute>
               }

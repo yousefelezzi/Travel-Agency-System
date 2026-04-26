@@ -9,12 +9,18 @@ const generateToken = (userId) => {
 };
 
 // POST /api/auth/register
+// Body: { email, username, password, role?, firstName, lastName, ...customer fields }
+// role defaults to CUSTOMER. Staff (TRAVEL_AGENT / ADMIN) get an Employee
+// profile instead of a Customer profile. The doc reserves staff-account
+// creation for admins (TC_046) but for academic / demo purposes we allow
+// self-signup with a role picker.
 const register = async (req, res, next) => {
   try {
     const {
       email,
       username,
       password,
+      role: requestedRole,
       firstName,
       middleName,
       lastName,
@@ -25,6 +31,22 @@ const register = async (req, res, next) => {
       city,
       state,
     } = req.body;
+
+    // Sanitize role
+    const ALLOWED_ROLES = ["CUSTOMER", "TRAVEL_AGENT", "ADMIN"];
+    const role = ALLOWED_ROLES.includes(requestedRole) ? requestedRole : "CUSTOMER";
+
+    if (!email || !username || !password || !firstName || !lastName) {
+      return res.status(400).json({
+        error: { message: "email, username, password, firstName, lastName are required." },
+      });
+    }
+    // Customer-only required field
+    if (role === "CUSTOMER" && !dateOfBirth) {
+      return res.status(400).json({
+        error: { message: "dateOfBirth is required for traveler accounts." },
+      });
+    }
 
     // Check duplicate email
     const existingEmail = await prisma.user.findUnique({ where: { email } });
@@ -46,29 +68,46 @@ const register = async (req, res, next) => {
 
     const passwordHash = await bcrypt.hash(password, 12);
 
-    // Create user + customer profile in a transaction
+    // Build the role-appropriate profile relation
+    const profileData =
+      role === "CUSTOMER"
+        ? {
+            customer: {
+              create: {
+                firstName,
+                middleName: middleName || null,
+                lastName,
+                dateOfBirth: new Date(dateOfBirth),
+                phone: phone || null,
+                accountType: accountType || "INDIVIDUAL",
+                street: street || null,
+                city: city || null,
+                state: state || null,
+              },
+            },
+          }
+        : {
+            employee: {
+              create: {
+                firstName,
+                middleName: middleName || null,
+                lastName,
+                isFullTime: true,
+              },
+            },
+          };
+
     const user = await prisma.user.create({
       data: {
         email,
         username,
         passwordHash,
-        role: "CUSTOMER",
-        customer: {
-          create: {
-            firstName,
-            middleName: middleName || null,
-            lastName,
-            dateOfBirth: new Date(dateOfBirth),
-            phone: phone || null,
-            accountType: accountType || "INDIVIDUAL",
-            street: street || null,
-            city: city || null,
-            state: state || null,
-          },
-        },
+        role,
+        ...profileData,
       },
       include: {
         customer: true,
+        employee: true,
       },
     });
 
@@ -82,12 +121,21 @@ const register = async (req, res, next) => {
         email: user.email,
         username: user.username,
         role: user.role,
-        customer: {
-          id: user.customer.id,
-          firstName: user.customer.firstName,
-          lastName: user.customer.lastName,
-          accountType: user.customer.accountType,
-        },
+        customer: user.customer
+          ? {
+              id: user.customer.id,
+              firstName: user.customer.firstName,
+              lastName: user.customer.lastName,
+              accountType: user.customer.accountType,
+            }
+          : null,
+        employee: user.employee
+          ? {
+              id: user.employee.id,
+              firstName: user.employee.firstName,
+              lastName: user.employee.lastName,
+            }
+          : null,
       },
     });
   } catch (error) {

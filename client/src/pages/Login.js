@@ -19,11 +19,33 @@ export default function Login() {
     setLoading(true);
     try {
       const data = await login(email, password);
-      if (data.user.role === "CUSTOMER") {
-        navigate("/dashboard");
-      } else {
-        navigate("/admin");
-      }
+      // Send each role to their primary workspace
+      if (data.user.role === "ADMIN") navigate("/admin");
+      else if (data.user.role === "TRAVEL_AGENT") navigate("/agent");
+      else navigate("/dashboard");
+    } catch (err) {
+      setError(err.response?.data?.error?.message || "Login failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Quick-pick demo accounts for graders / demos.
+  const DEMO_ACCOUNTS = [
+    { id: "CUSTOMER", label: "Customer", email: "john@example.com", password: "Test@1234" },
+    { id: "TRAVEL_AGENT", label: "Travel Agent", email: "agent@atlas.com", password: "Test@1234" },
+    { id: "ADMIN", label: "Administrator", email: "admin@atlas.com", password: "Test@1234" },
+  ];
+  const fillDemo = async (acct) => {
+    setEmail(acct.email);
+    setPassword(acct.password);
+    setError("");
+    setLoading(true);
+    try {
+      const data = await login(acct.email, acct.password);
+      if (data.user.role === "ADMIN") navigate("/admin");
+      else if (data.user.role === "TRAVEL_AGENT") navigate("/agent");
+      else navigate("/dashboard");
     } catch (err) {
       setError(err.response?.data?.error?.message || "Login failed");
     } finally {
@@ -90,6 +112,24 @@ export default function Login() {
           </div>
 
           {error && <div className="alert alert-error">{error}</div>}
+
+          <div className="auth-demo-strip">
+            <span className="auth-demo-label">Demo accounts</span>
+            <div className="auth-demo-buttons">
+              {DEMO_ACCOUNTS.map((acct) => (
+                <button
+                  key={acct.id}
+                  type="button"
+                  className="auth-demo-btn"
+                  onClick={() => fillDemo(acct)}
+                  disabled={loading}
+                  title={`${acct.email} · ${acct.password}`}
+                >
+                  Login as {acct.label}
+                </button>
+              ))}
+            </div>
+          </div>
 
           <form onSubmit={handleSubmit} className="auth-form">
             <div className="auth-field">
