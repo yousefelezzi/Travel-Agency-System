@@ -1,0 +1,416 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// ENUMS
+// ============================================
+
+enum Role {
+  CUSTOMER
+  TRAVEL_AGENT
+  ADMIN
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  MODIFIED
+}
+
+enum PaymentMethod {
+  CREDIT_CARD
+  DEBIT_CARD
+  PAYPAL
+  STRIPE
+  BANK_TRANSFER
+}
+
+enum AccountType {
+  INDIVIDUAL
+  GROUP
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum TicketCategory {
+  BOOKING_ISSUE
+  PAYMENT_REFUND
+  GENERAL_INFO
+  COMPLAINT
+}
+
+// ============================================
+// USER & AUTH (doc pages 110-111, 113)
+// ============================================
+
+model User {
+  id            String      @id @default(uuid())
+  email         String      @unique
+  username      String      @unique
+  passwordHash  String
+  role          Role        @default(CUSTOMER)
+  isActive      Boolean     @default(true)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  // Role-specific profiles
+  customer      Customer?
+  employee      Employee?
+
+  @@map("users")
+}
+
+// ============================================
+// CUSTOMER (doc pages 110-111)
+// ============================================
+
+model Customer {
+  id            String      @id @default(uuid())
+  userId        String      @unique
+  firstName     String
+  middleName    String?
+  lastName      String
+  dateOfBirth   DateTime
+  phone         String?
+  accountType   AccountType @default(INDIVIDUAL)
+
+  // Address (composite)
+  street        String?
+  city          String?
+  state         String?
+
+  // Payment token from Stripe (doc: "tokenizes and securely stores")
+  stripeCustomerId String?
+
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  // Relations
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bookings      Booking[]
+  travelers     Traveler[]
+  favorites     Favorite[]
+  travelProfile TravelProfile?
+  supportTickets SupportTicket[]
+
+  @@map("customers")
+}
+
+// ============================================
+// TRAVELER / PASSENGER (doc page 111)
+// ============================================
+
+model Traveler {
+  id            String      @id @default(uuid())
+  customerId    String
+  firstName     String
+  middleName    String?
+  lastName      String
+  dateOfBirth   DateTime
+  passportNumber String?
+  nationality   String?
+  passportExpiry DateTime?
+
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  customer      Customer    @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  passengers    Passenger[]
+
+  @@map("travelers")
+}
+
+// ============================================
+// EMPLOYEE (doc page 113)
+// ============================================
+
+model Employee {
+  id                String    @id @default(uuid())
+  userId            String    @unique
+  firstName         String
+  middleName        String?
+  lastName          String
+  dateOfBirth       DateTime?
+  dateOfEmployment  DateTime  @default(now())
+  isFullTime        Boolean   @default(true)
+  remarks           String?
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("employees")
+}
+
+// ============================================
+// FLIGHT (doc pages 113-114)
+// ============================================
+
+model Flight {
+  id              String    @id @default(uuid())
+  flightNumber    String    @unique
+  airlineName     String
+  aircraftType    String?
+
+  // Departure (composite)
+  departureDate   DateTime
+  departurePort   String
+
+  // Arrival (composite)
+  arrivalDate     DateTime
+  arrivalPort     String
+
+  // Pricing
+  economyPrice    Decimal   @db.Decimal(10, 2)
+  businessPrice   Decimal?  @db.Decimal(10, 2)
+  totalSeats      Int
+  availableSeats  Int
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  bookingItems    BookingItem[]
+
+  @@map("flights")
+}
+
+// ============================================
+// HOTEL
+// ============================================
+
+model Hotel {
+  id              String    @id @default(uuid())
+  name            String
+  city            String
+  country         String
+  address         String?
+  starRating      Int?
+  description     String?
+  pricePerNight   Decimal   @db.Decimal(10, 2)
+  totalRooms      Int
+  availableRooms  Int
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  bookingItems    BookingItem[]
+
+  @@map("hotels")
+}
+
+// ============================================
+// PACKAGE (doc pages 111-112)
+// ============================================
+
+model Package {
+  id            String    @id @default(uuid())
+  packageName   String
+  description   String?
+  services      String[]
+  price         Decimal   @db.Decimal(10, 2)
+  discount      Decimal   @default(0) @db.Decimal(5, 2)
+  isPublished   Boolean   @default(false)
+
+  // Availability window
+  startDate     DateTime?
+  endDate       DateTime?
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  bookingItems  BookingItem[]
+
+  @@map("packages")
+}
+
+// ============================================
+// BOOKING (doc pages 112-113)
+// ============================================
+
+model Booking {
+  id              String        @id @default(uuid())
+  customerId      String
+  bookingDate     DateTime      @default(now())
+  status          BookingStatus @default(PENDING)
+  numberOfPersons Int
+  totalAmount     Decimal       @db.Decimal(10, 2)
+  discount        Decimal       @default(0) @db.Decimal(10, 2)
+  // finalAmount = totalAmount - discount (derived, computed in code)
+
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  customer        Customer      @relation(fields: [customerId], references: [id])
+  items           BookingItem[]
+  passengers      Passenger[]
+  payments        Payment[]
+  invoice         Invoice?
+
+  @@map("bookings")
+}
+
+// Junction: what's included in a booking
+model BookingItem {
+  id          String    @id @default(uuid())
+  bookingId   String
+  flightId    String?
+  hotelId     String?
+  packageId   String?
+
+  // Hotel-specific
+  checkIn     DateTime?
+  checkOut    DateTime?
+
+  // Flight-specific
+  seatClass   String?
+
+  quantity    Int       @default(1)
+  unitPrice   Decimal   @db.Decimal(10, 2)
+
+  booking     Booking   @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  flight      Flight?   @relation(fields: [flightId], references: [id])
+  hotel       Hotel?    @relation(fields: [hotelId], references: [id])
+  package     Package?  @relation(fields: [packageId], references: [id])
+
+  @@map("booking_items")
+}
+
+// ============================================
+// PASSENGER per booking (doc page 111)
+// ============================================
+
+model Passenger {
+  id              String    @id @default(uuid())
+  bookingId       String
+  travelerId      String?
+  firstName       String
+  middleName      String?
+  lastName        String
+  dateOfBirth     DateTime
+  passportNumber  String?
+  nationality     String?
+  passportExpiry  DateTime?
+  seatPreference  String?
+  specialRequests String[]
+
+  booking         Booking   @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  traveler        Traveler? @relation(fields: [travelerId], references: [id])
+
+  @@map("passengers")
+}
+
+// ============================================
+// PAYMENT (doc page 112)
+// ============================================
+
+model Payment {
+  id              String        @id @default(uuid())
+  bookingId       String
+  paymentDate     DateTime      @default(now())
+  paymentMethod   PaymentMethod
+  amount          Decimal       @db.Decimal(10, 2)
+  transactionRef  String?
+  stripePaymentId String?
+
+  // Sender name (composite)
+  senderFirstName  String?
+  senderMiddleName String?
+  senderLastName   String?
+
+  // Billing address (composite)
+  billingStreet   String?
+  billingCity     String?
+  billingCountry  String?
+  billingPostal   String?
+
+  createdAt       DateTime      @default(now())
+
+  booking         Booking       @relation(fields: [bookingId], references: [id])
+
+  @@map("payments")
+}
+
+// ============================================
+// INVOICE
+// ============================================
+
+model Invoice {
+  id            String    @id @default(uuid())
+  bookingId     String    @unique
+  invoiceNumber String    @unique
+  issuedAt      DateTime  @default(now())
+  totalAmount   Decimal   @db.Decimal(10, 2)
+  pdfUrl        String?
+
+  booking       Booking   @relation(fields: [bookingId], references: [id])
+
+  @@map("invoices")
+}
+
+// ============================================
+// FAVORITES (from search/browse flow)
+// ============================================
+
+model Favorite {
+  id          String    @id @default(uuid())
+  customerId  String
+  flightId    String?
+  hotelId     String?
+  packageId   String?
+  createdAt   DateTime  @default(now())
+
+  customer    Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@map("favorites")
+}
+
+// ============================================
+// TRAVEL PERSONALITY PROFILE (doc page 16, FR 16.1-16.4)
+// ============================================
+
+model TravelProfile {
+  id            String    @id @default(uuid())
+  customerId    String    @unique
+  answers       Json
+  travelStyle   String?
+  budgetRange   String?
+  interests     String[]
+  generatedAt   DateTime  @default(now())
+
+  customer      Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@map("travel_profiles")
+}
+
+// ============================================
+// SUPPORT TICKETS (doc pages 29-30)
+// ============================================
+
+model SupportTicket {
+  id          String          @id @default(uuid())
+  customerId  String
+  category    TicketCategory
+  subject     String
+  description String
+  status      TicketStatus    @default(OPEN)
+  resolution  String?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  customer    Customer        @relation(fields: [customerId], references: [id])
+
+  @@map("support_tickets")
+}
