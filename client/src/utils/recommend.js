@@ -233,11 +233,14 @@ export const buildPlannerContext = (prefs) => {
   return parts.length ? `The user wants ${parts.join(", ")}.` : null;
 };
 
-const BUDGET_TO_USD = {
-  "under-500": 400,
-  "500-1000": 800,
-  "1000-3000": 2000,
-  "3000+": 4000,
+// Per-traveler ceiling (max), not a midpoint — fed straight into the planner's
+// hard budget filter on the server. "3000+" is open-ended, so we use a generous
+// cap rather than a real ceiling.
+const BUDGET_CEILING_USD = {
+  "under-500": 500,
+  "500-1000": 1000,
+  "1000-3000": 3000,
+  "3000+": 10000,
 };
 
 const DURATION_TO_DAYS = {
@@ -284,7 +287,7 @@ const ACTIVITY_TO_INTEREST = {
 export const quizToPlannerForm = (prefs, destinationName = "") => {
   if (!prefs) return null;
 
-  const budget = prefs.budget ? BUDGET_TO_USD[prefs.budget] : "";
+  const budget = prefs.budget ? BUDGET_CEILING_USD[prefs.budget] : "";
   const duration = prefs.duration ? DURATION_TO_DAYS[prefs.duration] : 0;
   const travelers = prefs.groupType ? GROUP_TO_TRAVELERS[prefs.groupType] : 2;
 

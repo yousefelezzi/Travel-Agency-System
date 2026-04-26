@@ -9,42 +9,52 @@ async function findCandidates({ destination, startDate, endDate, travelers, budg
     ? { contains: destination, mode: "insensitive" }
     : undefined;
 
+  const days = computeDays(startDate, endDate);
+  const cap = budget ? Number(budget) : null;
+  // Per-category soft caps derived from the per-traveler budget. Generous on
+  // purpose — the prompt enforces the joint flight+hotel total, while these
+  // caps just keep individually-impossible options out of Claude's view.
+  const flightCap = cap;
+  const hotelNightCap = cap ? cap / Math.max(days, 1) : null;
+  const pkgCap = cap ? cap * 1.5 : null;
+
+  const flightWhere = {
+    availableSeats: { gte: travelers || 1 },
+    ...(startDate && { departureDate: { gte: new Date(startDate) } }),
+    ...(destLike && { arrivalPort: destLike }),
+  };
+  const hotelWhere = {
+    availableRooms: { gte: 1 },
+    ...(destination && {
+      OR: [{ city: destLike }, { country: destLike }],
+    }),
+  };
+  const pkgWhere = {
+    isPublished: true,
+    ...(destination && {
+      OR: [{ packageName: destLike }, { description: destLike }],
+    }),
+  };
+
+  // If a budget cap rules everything out, fall back to the cheapest unfiltered
+  // options so Claude still has something to pick — and the prompt instructs
+  // it to surface "nothing fit your budget" in the rationale.
+  const fetchWithFallback = async (model, where, capField, capValue, orderBy) => {
+    if (capValue) {
+      const filtered = await model.findMany({
+        where: { ...where, [capField]: { lte: capValue } },
+        orderBy,
+        take: MAX_CANDIDATES,
+      });
+      if (filtered.length > 0) return filtered;
+    }
+    return model.findMany({ where, orderBy, take: MAX_CANDIDATES });
+  };
+
   const [flights, hotels, packages] = await Promise.all([
-    prisma.flight.findMany({
-      where: {
-        availableSeats: { gte: travelers || 1 },
-        ...(startDate && { departureDate: { gte: new Date(startDate) } }),
-        ...(destLike && { arrivalPort: destLike }),
-      },
-      orderBy: { departureDate: "asc" },
-      take: MAX_CANDIDATES,
-    }),
-    prisma.hotel.findMany({
-      where: {
-        availableRooms: { gte: 1 },
-        ...(destination && {
-          OR: [
-            { city: destLike },
-            { country: destLike },
-          ],
-        }),
-      },
-      orderBy: { pricePerNight: "asc" },
-      take: MAX_CANDIDATES,
-    }),
-    prisma.package.findMany({
-      where: {
-        isPublished: true,
-        ...(destination && {
-          OR: [
-            { packageName: destLike },
-            { description: destLike },
-          ],
-        }),
-      },
-      orderBy: { price: "asc" },
-      take: MAX_CANDIDATES,
-    }),
+    fetchWithFallback(prisma.flight, flightWhere, "economyPrice", flightCap, { departureDate: "asc" }),
+    fetchWithFallback(prisma.hotel, hotelWhere, "pricePerNight", hotelNightCap, { pricePerNight: "asc" }),
+    fetchWithFallback(prisma.package, pkgWhere, "price", pkgCap, { price: "asc" }),
   ]);
 
   return { flights, hotels, packages };
@@ -88,10 +98,12 @@ async function generateWithClaude(prefs, candidates) {
     ? `\nAdditional context from the traveler's profile / quiz:\n${prefs.context}\n`
     : "";
 
+  const budgetLine = buildBudgetRule(prefs, days);
+
   const prompt = `You are a premium travel planner for ATLAS (Travel Agency System).
 
 Plan a trip using ONLY the real options below. Pick the single best flight and hotel (and optionally a package) that match the traveler's preferences. Then create a concise day-by-day itinerary.
-${contextLine}
+${contextLine}${budgetLine}
 Traveler preferences:
 ${JSON.stringify(prefs, null, 2)}
 
@@ -138,17 +150,44 @@ function computeDays(start, end) {
   return Math.max(1, Math.min(14, d || 3));
 }
 
+function buildBudgetRule(prefs, days) {
+  const ceiling = prefs.budget ? Number(prefs.budget) : null;
+  if (!ceiling || !Number.isFinite(ceiling) || ceiling <= 0) return "";
+  const style = prefs.style || "balanced";
+  return `\nHARD BUDGET RULE: Per-traveler ceiling is $${ceiling}. The combined per-traveler cost — chosenFlight.economyPrice + (chosenHotel.pricePerNight × ${days}) + (chosenPackage discounted price, if used) — MUST stay at or below $${ceiling}. Style is "${style}": if "budget", aim well below the ceiling; if "luxury", you may approach it. If no combination in the inventory fits, pick the cheapest available combination and state plainly in the "rationale" that nothing fully matched the budget.\n`;
+}
+
 // Rule-based fallback when Claude isn't configured — still produces a usable plan.
 function generateFallback(prefs, candidates) {
   const days = computeDays(prefs.startDate, prefs.endDate);
+  const ceiling = prefs.budget ? Number(prefs.budget) : null;
+  const travelers = Math.max(1, parseInt(prefs.travelers, 10) || 1);
+
+  // Pick the cheapest flight + hotel from the (already-budget-filtered) pool.
   const flight = candidates.flights[0] || null;
   const hotel = candidates.hotels[0] || null;
-  const pkg = candidates.packages[0] || null;
+
+  // Package is optional — only include it if the per-traveler total still
+  // fits the budget ceiling. Otherwise the fallback would always exceed budget.
+  const perTraveler = (cand) => {
+    const f = flight ? Number(flight.economyPrice || 0) : 0;
+    const h = hotel ? (Number(hotel.pricePerNight || 0) * days) / travelers : 0;
+    const p = cand
+      ? Number(cand.price || 0) * (1 - Number(cand.discount || 0) / 100)
+      : 0;
+    return f + h + p;
+  };
+  let pkg = null;
+  if (ceiling) {
+    pkg = candidates.packages.find((p) => perTraveler(p) <= ceiling) || null;
+  } else {
+    pkg = candidates.packages[0] || null;
+  }
 
   const dest =
     flight?.to || hotel?.city || prefs.destination || "your destination";
 
-  const flightCost = flight ? flight.economyPrice * (prefs.travelers || 1) : 0;
+  const flightCost = flight ? flight.economyPrice * travelers : 0;
   const hotelCost = hotel ? hotel.pricePerNight * days : 0;
   const estimatedTotal = Math.round((flightCost + hotelCost) * 100) / 100;
 
@@ -283,8 +322,13 @@ async function refineWithClaude({ prefs, plan, instruction, history, candidates 
           .join("\n")}\n`
       : "";
 
+  const refineDays = Array.isArray(plan.days) && plan.days.length
+    ? plan.days.length
+    : computeDays(prefs.startDate, prefs.endDate);
+  const budgetLine = buildBudgetRule(prefs, refineDays);
+
   const prompt = `You are an ATLAS travel concierge refining an existing trip plan.
-${contextLine}
+${contextLine}${budgetLine}
 Traveler preferences:
 ${JSON.stringify(prefs, null, 2)}
 

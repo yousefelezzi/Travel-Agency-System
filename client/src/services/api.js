@@ -14,11 +14,16 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Handle 401 globally
+// Handle 401 globally — but not for the auth endpoints themselves, where
+// the caller (Login form / AuthContext bootstrap) already renders the error.
+// Otherwise a bad-password 401 force-reloads /login before the form can
+// display "Invalid email or password".
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    const url = error.config?.url || "";
+    const isAuthCall = url.startsWith("/auth/");
+    if (error.response?.status === 401 && !isAuthCall) {
       localStorage.removeItem("token");
       localStorage.removeItem("user");
       window.location.href = "/login";
