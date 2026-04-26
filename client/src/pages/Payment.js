@@ -13,6 +13,7 @@ const publishableKey = process.env.REACT_APP_STRIPE_PUBLISHABLE_KEY;
 const isRealStripeKey =
   publishableKey &&
   publishableKey.startsWith("pk_") &&
+  !publishableKey.toLowerCase().includes("placeholder") &&
   !publishableKey.includes("PASTE_YOUR_KEY") &&
   !publishableKey.includes("your_publishable_key");
 

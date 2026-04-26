@@ -45,7 +45,7 @@ export default function Navbar() {
             <button onClick={handleLogout} className="btn btn-outline">
               Logout
             </button>
-            <span className="nav-user">{user.email}</span>
+            <span className="nav-user">{user.username || user.email}</span>
           </>
         ) : (
           <>
