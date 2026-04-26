@@ -15,8 +15,8 @@ const { authenticate, authorize } = require("../middleware/auth.middleware");
 // All booking routes require authentication
 router.use(authenticate);
 
-// Customer routes
-router.post("/", authorize("CUSTOMER"), createBooking);
+// Customer + agent/admin (agents pass onBehalfOfCustomerId)
+router.post("/", authorize("CUSTOMER", "TRAVEL_AGENT", "ADMIN"), createBooking);
 router.get("/", authorize("CUSTOMER"), getMyBookings);
 router.get("/:id", getBookingById);
 router.get("/:id/cancellation-quote", getCancellationQuote);

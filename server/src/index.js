@@ -15,6 +15,9 @@ const paymentRoutes = require("./routes/payment.routes");
 const plannerRoutes = require("./routes/planner.routes");
 const chatRoutes = require("./routes/chat.routes");
 const supportRoutes = require("./routes/support.routes");
+const adminRoutes = require("./routes/admin.routes");
+const providerRoutes = require("./routes/provider.routes");
+const jobsRoutes = require("./routes/jobs.routes");
 
 const app = express();
 const PORT = process.env.PORT || 5001;
@@ -36,6 +39,9 @@ app.use("/api/payments", paymentRoutes);
 app.use("/api/planner", plannerRoutes);
 app.use("/api/chat", chatRoutes);
 app.use("/api/support", supportRoutes);
+app.use("/api/admin", adminRoutes);
+app.use("/api/provider", providerRoutes);
+app.use("/api/jobs", jobsRoutes);
 
 // Health check
 app.get("/api/health", async (req, res) => {
@@ -62,6 +68,12 @@ app.use((err, req, res, next) => {
 
 app.listen(PORT, () => {
   console.log(`ATLAS Server running on port ${PORT}`);
+  // Boot recurring jobs after the HTTP server is up.
+  try {
+    require("./services/scheduler.service").start();
+  } catch (err) {
+    console.error("[scheduler] failed to start:", err.message);
+  }
 });
 
 module.exports = app;

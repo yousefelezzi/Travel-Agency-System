@@ -8,12 +8,37 @@
 //
 // PENDING bookings (never paid) are cancelled with no fee.
 
+const prisma = require("../config/db");
+
 const DEFAULT_POLICY = {
   earlyTierDays: 7,
   earlyFeePercent: 10,
   lateFeePercent: 30,
   pendingFeePercent: 0,
 };
+
+const POLICY_KEY = "cancellation_policy";
+
+// Cache the policy to avoid hitting the DB on every cancellation check.
+// Refresh when the admin updates it (we just clear the cache).
+let cachedPolicy = null;
+let cachedAt = 0;
+const CACHE_TTL_MS = 60_000;
+
+async function loadPolicyFromDb() {
+  try {
+    const row = await prisma.systemConfig.findUnique({ where: { key: POLICY_KEY } });
+    return row?.value || null;
+  } catch {
+    return null;
+  }
+}
+
+async function refreshPolicyCache() {
+  cachedPolicy = (await loadPolicyFromDb()) || DEFAULT_POLICY;
+  cachedAt = Date.now();
+  return cachedPolicy;
+}
 
 // Pulls the earliest "travel" date from booking items so we can decide which
 // tier applies. Uses departure for flights, check-in for hotels, startDate
@@ -35,8 +60,11 @@ function daysUntil(date, from = new Date()) {
 }
 
 function getPolicy() {
-  // Future: read from a system_config table. For now, defaults.
-  return DEFAULT_POLICY;
+  // Sync getter — uses cached value or defaults. Async refresh runs in background.
+  if (!cachedPolicy || Date.now() - cachedAt > CACHE_TTL_MS) {
+    refreshPolicyCache().catch(() => {});
+  }
+  return cachedPolicy || DEFAULT_POLICY;
 }
 
 // Returns { feePercent, feeAmount, refundAmount, daysOut, tier, reason }
@@ -93,4 +121,10 @@ function quoteCancellation(booking) {
   };
 }
 
-module.exports = { quoteCancellation, earliestTravelDate, daysUntil, getPolicy };
+module.exports = {
+  quoteCancellation,
+  earliestTravelDate,
+  daysUntil,
+  getPolicy,
+  refreshPolicyCache,
+};

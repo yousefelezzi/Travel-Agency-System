@@ -278,7 +278,7 @@ export default function Flights() {
     setLoading(true);
     try {
       const f = overrides || filters;
-      const params = { page, limit: 10 };
+      const params = { page, limit: 25 };
       if (f.from) params.from = f.from;
       if (f.to) params.to = f.to;
       if (f.date) params.date = f.date;
@@ -287,7 +287,10 @@ export default function Flights() {
 
       const res = await api.get("/flights", { params });
       setFlights(res.data.flights);
-      setPagination(res.data.pagination);
+      setPagination({
+        ...res.data.pagination,
+        liveTotalAvailable: res.data.liveTotalAvailable || 0,
+      });
       setLastQuery({
         from: f.from,
         to: f.to,
@@ -395,11 +398,16 @@ export default function Flights() {
 
   const resultsHeadline = () => {
     const count = flights.length;
+    const total = pagination?.total || count;
     const { from, to } = lastQuery;
     if (!count && loading) return "Searching best routes\u2026";
     if (!count) return "No flights found";
     const parts = [];
-    parts.push(`${count} flight${count === 1 ? "" : "s"}`);
+    if (total > count) {
+      parts.push(`Showing ${count} of ${total.toLocaleString()} flight${total === 1 ? "" : "s"}`);
+    } else {
+      parts.push(`${count} flight${count === 1 ? "" : "s"}`);
+    }
     if (from && to) parts.push(`from ${from} to ${to}`);
     else if (from) parts.push(`from ${from}`);
     else if (to) parts.push(`to ${to}`);
@@ -568,19 +576,32 @@ export default function Flights() {
               const mins = durationMin(f);
               const isBest = f.id === bestId;
               const seatsLow = f.availableSeats <= 5;
+              const goToFlight = () => {
+                if (f.isLive) {
+                  window.open(f.externalUrl || "https://www.booking.com/flights", "_blank", "noopener");
+                } else {
+                  navigate(`/book?type=flight&id=${f.id}`);
+                }
+              };
               return (
                 <article
                   key={f.id}
                   className={`flight-card ${isBest ? "flight-card-best" : ""}`}
-                  onClick={() => navigate(`/book?type=flight&id=${f.id}`)}
+                  onClick={goToFlight}
                   role="button"
                   tabIndex={0}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter") navigate(`/book?type=flight&id=${f.id}`);
+                    if (e.key === "Enter") goToFlight();
                   }}
                   style={{ animationDelay: `${idx * 0.04}s` }}
                 >
                   {isBest && <span className="flight-badge">{bestLabel}</span>}
+                  {f.isLive && (
+                    <span className="live-badge" title="Real-time inventory from Booking.com">
+                      <span className="live-badge-dot" />
+                      LIVE
+                    </span>
+                  )}
                   <div className="flight-card-main">
                     <div className="flight-airline">
                       <div className="flight-airline-mark" aria-hidden="true">
@@ -627,10 +648,10 @@ export default function Flights() {
                         className="flight-book-btn"
                         onClick={(e) => {
                           e.stopPropagation();
-                          navigate(`/book?type=flight&id=${f.id}`);
+                          goToFlight();
                         }}
                       >
-                        Select
+                        {f.isLive ? "View on Booking.com" : "Select"}
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M5 12h14M12 5l7 7-7 7" />
                         </svg>

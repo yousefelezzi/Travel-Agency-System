@@ -41,6 +41,7 @@ export default function Navbar() {
             {(user.role === "ADMIN" || user.role === "TRAVEL_AGENT") && (
               <NavLink to="/agent">Agent</NavLink>
             )}
+            {user.role === "ADMIN" && <NavLink to="/admin">Admin</NavLink>}
             <button onClick={handleLogout} className="btn btn-outline">
               Logout
             </button>

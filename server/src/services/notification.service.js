@@ -176,6 +176,54 @@ async function sendBookingCancellation({
   });
 }
 
+async function sendProviderBookingNotification({ booking, providerEmail, providerName, items }) {
+  const itemLines = (items || [])
+    .map((i) => {
+      if (i.flight) {
+        return `<li><strong>${i.flight.flightNumber}</strong> · ${i.flight.departurePort} → ${i.flight.arrivalPort} · ${fmtDate(i.flight.departureDate)} · ${i.quantity || 1} seat${(i.quantity || 1) === 1 ? "" : "s"}</li>`;
+      }
+      if (i.hotel) {
+        return `<li><strong>${i.hotel.name}</strong> · ${i.hotel.city} · ${fmtDate(i.checkIn)} → ${fmtDate(i.checkOut)}</li>`;
+      }
+      if (i.package) {
+        return `<li><strong>${i.package.packageName}</strong> · ${i.quantity || 1} pax</li>`;
+      }
+      return "";
+    })
+    .join("");
+
+  const passengerLines = (booking.passengers || [])
+    .map(
+      (p) =>
+        `<li>${[p.firstName, p.middleName, p.lastName].filter(Boolean).join(" ")}${
+          p.passportNumber ? ` · Passport ${p.passportNumber}` : ""
+        }${p.nationality ? ` (${p.nationality})` : ""}</li>`
+    )
+    .join("");
+
+  const html = wrap(
+    `New booking from ATLAS — ${booking.id.slice(0, 8).toUpperCase()}`,
+    `
+      <p>Hi ${providerName},</p>
+      <p>A traveler just booked one of your services through ATLAS. Please confirm receipt and provision the reservation on your end.</p>
+      <p style="background: #F0F9FF; padding: 12px 16px; border-radius: 8px; border-left: 3px solid #0EA5E9;">
+        <strong>Booking ID:</strong> ${booking.id.slice(0, 8).toUpperCase()}<br />
+        <strong>Travelers:</strong> ${booking.numberOfPersons}
+      </p>
+      <strong>Items</strong>
+      <ul>${itemLines}</ul>
+      ${passengerLines ? `<strong>Passengers</strong><ul>${passengerLines}</ul>` : ""}
+      <p>Reply to this email or hit the ATLAS provider API to confirm. Bookings without confirmation within 24h are flagged as PENDING.</p>
+    `
+  );
+  return sendEmail({
+    to: providerEmail,
+    subject: `New ATLAS booking · ${booking.id.slice(0, 8).toUpperCase()}`,
+    html,
+    text: `New booking ${booking.id} for ${booking.numberOfPersons} traveler(s).`,
+  });
+}
+
 async function sendTripReminder({ booking, customerEmail, departureDate }) {
   const html = wrap(
     "Your trip is coming up.",
@@ -204,4 +252,5 @@ module.exports = {
   sendBookingModification,
   sendBookingCancellation,
   sendTripReminder,
+  sendProviderBookingNotification,
 };

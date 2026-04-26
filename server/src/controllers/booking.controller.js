@@ -34,10 +34,12 @@ async function ensureOwnership(req, booking) {
 }
 
 // POST /api/bookings
-// Body: { items: [{ type, id, seatClass?, checkIn?, checkOut?, quantity? }], passengers: [...] }
+// Body: { items: [...], passengers: [...], onBehalfOfCustomerId? }
+// Customers book for themselves; agents/admins may pass
+// `onBehalfOfCustomerId` to create a booking under another customer.
 const createBooking = async (req, res, next) => {
   try {
-    const { items, passengers } = req.body;
+    const { items, passengers, onBehalfOfCustomerId } = req.body;
 
     if (!items || items.length === 0) {
       return res
@@ -51,10 +53,27 @@ const createBooking = async (req, res, next) => {
         .json({ error: { message: "At least one passenger is required." } });
     }
 
-    // Get customer profile
-    const customer = await prisma.customer.findUnique({
-      where: { userId: req.user.id },
-    });
+    // Resolve target customer profile.
+    // - Staff (TRAVEL_AGENT/ADMIN) booking for someone else: use the explicit ID
+    // - Otherwise: the authenticated user's own customer profile
+    let customer;
+    if (
+      onBehalfOfCustomerId &&
+      (req.user.role === "TRAVEL_AGENT" || req.user.role === "ADMIN")
+    ) {
+      customer = await prisma.customer.findUnique({
+        where: { id: onBehalfOfCustomerId },
+      });
+      if (!customer) {
+        return res
+          .status(404)
+          .json({ error: { message: "Target customer not found." } });
+      }
+    } else {
+      customer = await prisma.customer.findUnique({
+        where: { userId: req.user.id },
+      });
+    }
 
     if (!customer) {
       return res

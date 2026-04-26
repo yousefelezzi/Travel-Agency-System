@@ -280,6 +280,25 @@ export default function Book() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [onBehalf, setOnBehalf] = useState(null);
+
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem("atlas_book_on_behalf");
+      if (raw) setOnBehalf(JSON.parse(raw));
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const clearOnBehalf = () => {
+    try {
+      sessionStorage.removeItem("atlas_book_on_behalf");
+    } catch {
+      // ignore
+    }
+    setOnBehalf(null);
+  };
 
   const [checkIn, setCheckIn] = useState("");
   const [checkOut, setCheckOut] = useState("");
@@ -371,10 +390,29 @@ export default function Book() {
     }
 
     try {
-      const res = await api.post("/bookings", {
-        items: [bookingItem],
-        passengers,
-      });
+      // If an agent/admin set up a book-on-behalf target in sessionStorage,
+      // forward that customerId so the booking is created under that customer.
+      let onBehalfOfCustomerId;
+      try {
+        const raw = sessionStorage.getItem("atlas_book_on_behalf");
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          onBehalfOfCustomerId = parsed?.customerId;
+        }
+      } catch {
+        // ignore
+      }
+
+      const payload = { items: [bookingItem], passengers };
+      if (onBehalfOfCustomerId) payload.onBehalfOfCustomerId = onBehalfOfCustomerId;
+
+      const res = await api.post("/bookings", payload);
+      // Clear the book-on-behalf flag once the booking is created
+      try {
+        sessionStorage.removeItem("atlas_book_on_behalf");
+      } catch {
+        // ignore
+      }
       navigate(`/payment/${res.data.booking.id}`);
     } catch (err) {
       setError(err.response?.data?.error?.message || "Booking failed.");
@@ -444,6 +482,17 @@ export default function Book() {
 
           {/* RIGHT — Form */}
           <form onSubmit={handleSubmit} className="book-form">
+            {onBehalf && (
+              <div className="book-onbehalf">
+                <div>
+                  <strong>Booking on behalf of {onBehalf.name}</strong>
+                  <span>{onBehalf.email}</span>
+                </div>
+                <button type="button" className="btn btn-ghost btn-sm" onClick={clearOnBehalf}>
+                  Cancel handoff
+                </button>
+              </div>
+            )}
             {error && <div className="alert alert-error">{error}</div>}
 
             <div className="book-form__section-head">

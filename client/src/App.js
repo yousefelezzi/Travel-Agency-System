@@ -19,6 +19,8 @@ import Build from "./pages/Build";
 import Destination from "./pages/Destination";
 import Support from "./pages/Support";
 import AgentDashboard from "./pages/AgentDashboard";
+import AdminDashboard from "./pages/AdminDashboard";
+import Careers from "./pages/Careers";
 import "./App.css";
 
 function App() {
@@ -48,9 +50,18 @@ function App() {
               }
             />
             <Route
+              path="/admin"
+              element={
+                <ProtectedRoute roles={["ADMIN"]}>
+                  <AdminDashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route path="/careers" element={<Careers />} />
+            <Route
               path="/book"
               element={
-                <ProtectedRoute roles={["CUSTOMER"]}>
+                <ProtectedRoute roles={["CUSTOMER", "TRAVEL_AGENT", "ADMIN"]}>
                   <Book />
                 </ProtectedRoute>
               }

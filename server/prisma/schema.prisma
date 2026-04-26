@@ -414,3 +414,91 @@ model SupportTicket {
 
   @@map("support_tickets")
 }
+
+// ============================================
+// SYSTEM CONFIG (admin overrides for cancellation policy + provider creds)
+// ============================================
+
+model SystemConfig {
+  id          String   @id @default(uuid())
+  key         String   @unique
+  value       Json
+  updatedAt   DateTime @updatedAt
+  createdAt   DateTime @default(now())
+
+  @@map("system_config")
+}
+
+// ============================================
+// CAREERS PORTAL (doc pages 36-37, TC_050)
+// ============================================
+
+model JobListing {
+  id              String           @id @default(uuid())
+  title           String
+  department      String
+  description     String
+  qualifications  String           @default("")
+  workHours       String?
+  compensation    String?
+  isPublished     Boolean          @default(false)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  applications    JobApplication[]
+
+  @@map("job_listings")
+}
+
+model JobApplication {
+  id              String      @id @default(uuid())
+  listingId       String
+  applicantName   String
+  email           String
+  phone           String?
+  resumeUrl       String?
+  coverLetter     String?
+  createdAt       DateTime    @default(now())
+
+  listing         JobListing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  @@map("job_applications")
+}
+
+// ============================================
+// EXTERNAL SERVICE PROVIDERS (TC_055-058)
+// ============================================
+
+enum ProviderType {
+  AIRLINE
+  HOTEL
+  TOUR_OPERATOR
+}
+
+model Provider {
+  id              String                 @id @default(uuid())
+  name            String                 @unique
+  apiKey          String                 @unique
+  contactEmail    String
+  type            ProviderType
+  isActive        Boolean                @default(true)
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+
+  inventoryLogs   ProviderInventoryLog[]
+
+  @@map("providers")
+}
+
+model ProviderInventoryLog {
+  id              String    @id @default(uuid())
+  providerId      String
+  payload         Json
+  status          String    // ACCEPTED, REJECTED
+  errors          String[]
+  receivedAt      DateTime  @default(now())
+
+  provider        Provider  @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@map("provider_inventory_logs")
+}

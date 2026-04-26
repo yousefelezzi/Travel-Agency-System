@@ -1,6 +1,9 @@
 const prisma = require("../config/db");
 const stripe = require("../config/stripe");
-const { sendBookingConfirmation } = require("../services/notification.service");
+const {
+  sendBookingConfirmation,
+  sendProviderBookingNotification,
+} = require("../services/notification.service");
 
 // Best-effort confirmation email after a payment succeeds.
 async function fireConfirmationEmail(bookingId) {
@@ -9,12 +12,44 @@ async function fireConfirmationEmail(bookingId) {
       where: { id: bookingId },
       include: {
         items: { include: { flight: true, hotel: true, package: true } },
+        passengers: true,
         customer: { include: { user: { select: { email: true } } } },
       },
     });
-    const email = full?.customer?.user?.email;
-    if (!email) return;
-    await sendBookingConfirmation({ booking: full, customerEmail: email });
+    if (!full) return;
+
+    // Customer confirmation
+    const email = full.customer?.user?.email;
+    if (email) {
+      await sendBookingConfirmation({ booking: full, customerEmail: email });
+    }
+
+    // Provider notifications (TC_057). Group items by provider.
+    const providerItemMap = new Map();
+    for (const item of full.items) {
+      let providerName = null;
+      if (item.flight?.airlineName) providerName = item.flight.airlineName;
+      else if (item.hotel?.name) providerName = item.hotel.name;
+      else if (item.package?.packageName) providerName = item.package.packageName;
+      if (!providerName) continue;
+      if (!providerItemMap.has(providerName)) providerItemMap.set(providerName, []);
+      providerItemMap.get(providerName).push(item);
+    }
+    if (providerItemMap.size > 0) {
+      const providers = await prisma.provider.findMany({
+        where: { name: { in: [...providerItemMap.keys()] }, isActive: true },
+      });
+      for (const provider of providers) {
+        sendProviderBookingNotification({
+          booking: full,
+          providerEmail: provider.contactEmail,
+          providerName: provider.name,
+          items: providerItemMap.get(provider.name) || [],
+        }).catch((err) =>
+          console.error(`[notifications] provider notify (${provider.name}) failed:`, err.message)
+        );
+      }
+    }
   } catch (err) {
     console.error("[notifications] confirmation email failed:", err.message);
   }

@@ -1,4 +1,5 @@
 const prisma = require("../config/db");
+const { searchExternalFlights, ENABLED: EXTERNAL_ENABLED } = require("../services/external-inventory.service");
 
 // GET /api/flights?from=&to=&date=&maxPrice=&passengers=&page=&limit=
 const searchFlights = async (req, res, next) => {
@@ -29,7 +30,14 @@ const searchFlights = async (req, res, next) => {
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    const [flights, total] = await Promise.all([
+    // Run live + DB lookups in parallel; live results lead the list.
+    const wantLive = EXTERNAL_ENABLED && from && to && date;
+    const livePromise = wantLive
+      ? searchExternalFlights({ from, to, date, passengers: parseInt(passengers) })
+      : Promise.resolve({ flights: [], totalAvailable: 0 });
+
+    const [liveResult, dbFlights, total] = await Promise.all([
+      livePromise.catch(() => ({ flights: [], totalAvailable: 0 })),
       prisma.flight.findMany({
         where,
         orderBy: { economyPrice: "asc" },
@@ -39,13 +47,20 @@ const searchFlights = async (req, res, next) => {
       prisma.flight.count({ where }),
     ]);
 
+    const liveFlights = liveResult.flights || [];
+    const filteredLive = maxPrice
+      ? liveFlights.filter((f) => f.economyPrice <= parseFloat(maxPrice))
+      : liveFlights;
+
     res.json({
-      flights,
+      flights: [...filteredLive, ...dbFlights],
+      live: filteredLive.length,
+      liveTotalAvailable: liveResult.totalAvailable || 0,
       pagination: {
         page: parseInt(page),
         limit: parseInt(limit),
-        total,
-        totalPages: Math.ceil(total / parseInt(limit)),
+        total: total + (liveResult.totalAvailable || filteredLive.length),
+        totalPages: Math.ceil((total + filteredLive.length) / parseInt(limit)),
       },
     });
   } catch (error) {

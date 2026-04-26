@@ -202,14 +202,17 @@ export default function Hotels() {
     setLoading(true);
     try {
       const f = overrides || filters;
-      const params = { page, limit: 12 };
+      const params = { page, limit: 24 };
       if (f.city) params.city = f.city;
       if (f.country) params.country = f.country;
       if (f.maxPrice) params.maxPrice = f.maxPrice;
       if (f.minRating) params.minRating = f.minRating;
       const res = await api.get("/hotels", { params });
       setHotels(res.data.hotels || []);
-      setPagination(res.data.pagination || {});
+      setPagination({
+        ...(res.data.pagination || {}),
+        liveTotalAvailable: res.data.liveTotalAvailable || 0,
+      });
       setLastQuery({
         city: f.city,
         checkIn: f.checkIn,
@@ -303,10 +306,15 @@ export default function Hotels() {
 
   const resultsHeadline = () => {
     const count = sortedHotels.length;
+    const total = pagination?.total || count;
     if (!count && loading) return "Searching the best hotels\u2026";
     if (!count) return "No hotels found";
     const parts = [];
-    parts.push(`${count} hotel${count === 1 ? "" : "s"}`);
+    if (total > count) {
+      parts.push(`Showing ${count} of ${total.toLocaleString()} hotel${total === 1 ? "" : "s"}`);
+    } else {
+      parts.push(`${count} hotel${count === 1 ? "" : "s"}`);
+    }
     if (lastQuery.city) parts.push(`in ${lastQuery.city}`);
     return parts.join(" ");
   };
@@ -608,16 +616,23 @@ export default function Hotels() {
               const type = stayType(h);
               const signals = trustSignals(h);
               const imgSrc = hotelImage(h, idx);
+              const goToHotel = () => {
+                if (h.isLive) {
+                  window.open(h.externalUrl || "https://www.booking.com", "_blank", "noopener");
+                } else {
+                  navigate(`/book?type=hotel&id=${h.id}`);
+                }
+              };
 
               return (
                 <article
                   key={h.id}
                   className={`hotel-card ${isBest ? "hotel-card-best" : ""} ${isFeatured ? "hotel-card-featured" : ""}`}
-                  onClick={() => navigate(`/book?type=hotel&id=${h.id}`)}
+                  onClick={goToHotel}
                   role="button"
                   tabIndex={0}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter") navigate(`/book?type=hotel&id=${h.id}`);
+                    if (e.key === "Enter") goToHotel();
                   }}
                   style={{ animationDelay: `${idx * 0.05}s` }}
                 >
@@ -636,6 +651,12 @@ export default function Hotels() {
                     {isBest && (
                       <span className="hotel-badge">
                         {sort === "cheapest" ? "Cheapest" : sort === "rating" ? "Top Rated" : sort === "best" ? "Best Value" : "Recommended"}
+                      </span>
+                    )}
+                    {h.isLive && (
+                      <span className="live-badge" title="Real-time inventory from Booking.com">
+                        <span className="live-badge-dot" />
+                        LIVE
                       </span>
                     )}
 
@@ -718,10 +739,10 @@ export default function Hotels() {
                         className="hotel-book-btn"
                         onClick={(e) => {
                           e.stopPropagation();
-                          navigate(`/book?type=hotel&id=${h.id}`);
+                          goToHotel();
                         }}
                       >
-                        View Stay
+                        {h.isLive ? "View on Booking.com" : "View Stay"}
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5l7 7-7 7" /></svg>
                       </button>
                     </div>

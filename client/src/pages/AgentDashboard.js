@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import api from "../services/api";
 
 const TICKET_STATUS_TONES = {
@@ -457,6 +458,293 @@ function PackagesPanel() {
   );
 }
 
+// ─── Customers tab (TC_045 — book on behalf + UR8 customer profile drill-in) ──
+const STATUS_TONES_AG = {
+  PENDING: "warning",
+  CONFIRMED: "success",
+  MODIFIED: "info",
+  CANCELLED: "muted",
+};
+
+function CustomersPanel() {
+  const navigate = useNavigate();
+  const [q, setQ] = useState("");
+  const [customers, setCustomers] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  // Drill-in state
+  const [openCustomer, setOpenCustomer] = useState(null);
+  const [openBookings, setOpenBookings] = useState([]);
+  const [drillLoading, setDrillLoading] = useState(false);
+  const [drillError, setDrillError] = useState("");
+
+  // Cancellation modal state (nested within the drill-in modal)
+  const [cancelTarget, setCancelTarget] = useState(null);
+  const [quote, setQuote] = useState(null);
+  const [quoteLoading, setQuoteLoading] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const res = await api.get("/admin/customers", { params: { q, limit: 30 } });
+      setCustomers(res.data.customers);
+    } catch {
+      // ignore
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const startBooking = (customer) => {
+    try {
+      sessionStorage.setItem(
+        "atlas_book_on_behalf",
+        JSON.stringify({
+          customerId: customer.id,
+          name: `${customer.firstName} ${customer.lastName}`.trim(),
+          email: customer.user?.email,
+        })
+      );
+    } catch {
+      // ignore
+    }
+    navigate("/flights");
+  };
+
+  const openProfile = async (c) => {
+    setOpenCustomer(c);
+    setOpenBookings([]);
+    setDrillError("");
+    setDrillLoading(true);
+    try {
+      const res = await api.get(`/admin/customers/${c.id}/bookings`);
+      setOpenBookings(res.data.bookings);
+    } catch (err) {
+      setDrillError(err.response?.data?.error?.message || "Couldn't load bookings.");
+    } finally {
+      setDrillLoading(false);
+    }
+  };
+
+  const closeDrill = () => {
+    setOpenCustomer(null);
+    setOpenBookings([]);
+    setCancelTarget(null);
+    setQuote(null);
+  };
+
+  const refreshDrill = async () => {
+    if (!openCustomer) return;
+    const res = await api.get(`/admin/customers/${openCustomer.id}/bookings`);
+    setOpenBookings(res.data.bookings);
+  };
+
+  const startCancel = async (b) => {
+    setCancelTarget(b);
+    setQuote(null);
+    setQuoteLoading(true);
+    try {
+      const res = await api.get(`/bookings/${b.id}/cancellation-quote`);
+      setQuote(res.data.quote);
+    } catch (err) {
+      setDrillError(err.response?.data?.error?.message || "Couldn't load quote.");
+      setCancelTarget(null);
+    } finally {
+      setQuoteLoading(false);
+    }
+  };
+
+  const confirmCancel = async () => {
+    setBusy(true);
+    try {
+      await api.post(`/bookings/${cancelTarget.id}/cancel`);
+      setCancelTarget(null);
+      refreshDrill();
+    } catch (err) {
+      setDrillError(err.response?.data?.error?.message || "Cancel failed.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div>
+      <div className="ag-toolbar">
+        <h2>Customers</h2>
+        <div className="ad-filter-row" style={{ marginBottom: 0 }}>
+          <input
+            type="text"
+            className="ad-input"
+            placeholder="Search by name, email, or phone…"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && load()}
+          />
+          <button type="button" className="btn btn-outline" onClick={load}>
+            {loading ? "Loading…" : "Search"}
+          </button>
+        </div>
+      </div>
+
+      <p className="ag-customers-help">
+        Click a customer to view their full booking history. Use "Book on behalf →" to start a new booking under their account.
+      </p>
+
+      <div className="ag-customer-list">
+        {customers.map((c) => (
+          <article key={c.id} className="ag-customer">
+            <button
+              type="button"
+              className="ag-customer-open"
+              onClick={() => openProfile(c)}
+            >
+              <span className="ag-customer-name">
+                {c.firstName} {c.lastName}
+              </span>
+              <span className="ag-customer-meta">
+                {c.user?.email}
+                {c.phone ? ` · ${c.phone}` : ""}
+                {c.city ? ` · ${c.city}` : ""}
+              </span>
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              onClick={() => startBooking(c)}
+            >
+              Book on behalf →
+            </button>
+          </article>
+        ))}
+        {customers.length === 0 && (
+          <div className="ag-empty">No customers match this search.</div>
+        )}
+      </div>
+
+      {/* ── Customer drill-in modal ── */}
+      {openCustomer && (
+        <div className="bd-modal-backdrop" onClick={closeDrill}>
+          <div className="bd-modal ag-modal-wide" onClick={(e) => e.stopPropagation()}>
+            <header className="bd-modal__head">
+              <div>
+                <h3>{openCustomer.firstName} {openCustomer.lastName}</h3>
+                <small className="ag-customer-meta">{openCustomer.user?.email}</small>
+              </div>
+              <button type="button" className="bd-modal__close" onClick={closeDrill}>×</button>
+            </header>
+            <div className="bd-modal__body">
+              <div className="ag-customer-summary">
+                <div><strong>Phone:</strong> {openCustomer.phone || "—"}</div>
+                <div><strong>City:</strong> {openCustomer.city || "—"}</div>
+                <div><strong>Bookings:</strong> {drillLoading ? "…" : openBookings.length}</div>
+              </div>
+
+              <div className="ag-customer-actions-row">
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => startBooking(openCustomer)}
+                >
+                  Book on behalf →
+                </button>
+              </div>
+
+              {drillError && <div className="alert alert-error">{drillError}</div>}
+
+              <h4 className="ag-customer-history-h">Booking history</h4>
+              {drillLoading ? (
+                <p className="bd-modal__muted">Loading bookings…</p>
+              ) : openBookings.length === 0 ? (
+                <p className="bd-modal__muted">No bookings yet.</p>
+              ) : (
+                <div className="ag-customer-bookings">
+                  {openBookings.map((b) => {
+                    const item = b.items?.[0];
+                    const label = item?.flight
+                      ? `${item.flight.departurePort} → ${item.flight.arrivalPort}`
+                      : item?.hotel?.name || item?.package?.packageName || "Trip";
+                    return (
+                      <article key={b.id} className="ag-customer-booking">
+                        <div>
+                          <div className="ag-customer-booking-label">{label}</div>
+                          <div className="ag-customer-booking-meta">
+                            #{b.id.slice(0, 8).toUpperCase()} · {fmtDate(b.bookingDate)}
+                          </div>
+                        </div>
+                        <span className={`sup-ticket-status sup-ticket-status--${STATUS_TONES_AG[b.status] || "muted"}`}>
+                          {b.status.toLowerCase()}
+                        </span>
+                        <strong>{fmtMoney(Number(b.totalAmount) - Number(b.discount || 0))}</strong>
+                        {b.status !== "CANCELLED" && (
+                          <button
+                            type="button"
+                            className="btn btn-danger btn-sm"
+                            onClick={() => startCancel(b)}
+                          >
+                            Cancel
+                          </button>
+                        )}
+                      </article>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Nested cancel confirmation ── */}
+      {cancelTarget && (
+        <div className="bd-modal-backdrop" onClick={() => !busy && setCancelTarget(null)}>
+          <div className="bd-modal" onClick={(e) => e.stopPropagation()}>
+            <header className="bd-modal__head">
+              <h3>Cancel booking #{cancelTarget.id.slice(0, 8).toUpperCase()}?</h3>
+              <button type="button" className="bd-modal__close" onClick={() => setCancelTarget(null)}>×</button>
+            </header>
+            <div className="bd-modal__body">
+              {quoteLoading ? (
+                <p className="bd-modal__muted">Calculating fee…</p>
+              ) : quote ? (
+                <>
+                  <div className="bd-modal__row">
+                    <span>Booking total</span>
+                    <strong>{fmtMoney(cancelTarget.totalAmount)}</strong>
+                  </div>
+                  <div className="bd-modal__row bd-modal__row--fee">
+                    <span>Cancellation fee ({quote.feePercent}%)</span>
+                    <strong>− {fmtMoney(quote.feeAmount)}</strong>
+                  </div>
+                  <div className="bd-modal__divider" />
+                  <div className="bd-modal__row bd-modal__row--total">
+                    <span>Refund to customer</span>
+                    <strong>{fmtMoney(quote.refundAmount)}</strong>
+                  </div>
+                  {quote.reason && <p className="bd-modal__reason">{quote.reason}</p>}
+                </>
+              ) : null}
+            </div>
+            <footer className="bd-modal__foot">
+              <button type="button" className="btn btn-ghost" onClick={() => setCancelTarget(null)} disabled={busy}>
+                Keep booking
+              </button>
+              <button type="button" className="btn btn-danger" onClick={confirmCancel} disabled={busy || quoteLoading}>
+                {busy ? "Cancelling…" : "Yes, cancel"}
+              </button>
+            </footer>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Page shell ───────────────────────────────────────────────────────
 export default function AgentDashboard() {
   const [tab, setTab] = useState("tickets");
@@ -467,28 +755,29 @@ export default function AgentDashboard() {
         <header className="ag-page__head">
           <span className="ag-eyebrow">— Travel Agent</span>
           <h1>Agent workspace</h1>
-          <p>Resolve customer tickets and manage tour packages from one place.</p>
+          <p>Resolve customer tickets, manage tour packages, and book on behalf of customers.</p>
         </header>
 
         <div className="ag-tabs">
-          <button
-            type="button"
-            className={`ag-tab ${tab === "tickets" ? "is-active" : ""}`}
-            onClick={() => setTab("tickets")}
-          >
-            Support tickets
-          </button>
-          <button
-            type="button"
-            className={`ag-tab ${tab === "packages" ? "is-active" : ""}`}
-            onClick={() => setTab("packages")}
-          >
-            Packages
-          </button>
+          {[
+            ["tickets", "Support tickets"],
+            ["packages", "Packages"],
+            ["customers", "Customers"],
+          ].map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              className={`ag-tab ${tab === id ? "is-active" : ""}`}
+              onClick={() => setTab(id)}
+            >
+              {label}
+            </button>
+          ))}
         </div>
 
         {tab === "tickets" && <TicketsPanel />}
         {tab === "packages" && <PackagesPanel />}
+        {tab === "customers" && <CustomersPanel />}
       </div>
     </div>
   );
